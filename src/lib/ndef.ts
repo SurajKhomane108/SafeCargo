@@ -72,32 +72,61 @@ function getDataBytes(record: { data: unknown }): Uint8Array {
 export function decodeTextRecord(record: {
   data: unknown;
   encoding?: string;
+  lang?: string;
 }): { text: string; lang?: string; encoding?: string } {
   try {
-    const encoding =
-      (record.encoding as string)?.toLowerCase() === "utf-16"
-        ? "utf-16"
-        : "utf-8";
+    const rawEncoding = (record.encoding as string)?.toLowerCase();
+    const encoding = rawEncoding === "utf-16" ? "utf-16" : "utf-8";
     const bytes = getDataBytes(record);
     if (bytes.length === 0) {
       return { text: "", encoding };
     }
+
+    // 1. In standard Web NFC (Chrome on Android), record.data is ALREADY
+    // the plain text payload (status byte and language code are already
+    // parsed by Chromium and exposed on record.encoding and record.lang).
+    const directText = toUtf8Safe(bytes, encoding);
+    const trimmed = directText.trim();
+    if (
+      trimmed.startsWith("{") ||
+      trimmed.startsWith("[") ||
+      trimmed.includes("SafeCargo") ||
+      (record as { lang?: string }).lang
+    ) {
+      return {
+        text: directText,
+        lang: (record as { lang?: string }).lang,
+        encoding,
+      };
+    }
+
+    // 2. Fallback: only if the first byte looks like a genuine IANA RTD-Text status byte:
+    // The language code length in standard RTD-Text is always 1-15 ASCII chars (e.g. "en", "en-US").
     const status = bytes[0];
     const languageCodeLength = status & 0x3f;
     const isUtf16 = (status & 0x80) !== 0;
     const finalEncoding = isUtf16 ? "utf-16" : encoding;
 
-    let lang: string | undefined;
-    if (languageCodeLength > 0 && bytes.length >= languageCodeLength + 1) {
+    if (
+      languageCodeLength > 0 &&
+      languageCodeLength < 16 &&
+      bytes.length > languageCodeLength + 1
+    ) {
       const langBytes = bytes.slice(1, 1 + languageCodeLength);
-      lang = new TextDecoder("us-ascii", { fatal: false })
-        .decode(langBytes)
-        .toLowerCase();
+      const isAsciiLang = Array.from(langBytes).every(
+        (b) => (b >= 97 && b <= 122) || (b >= 65 && b <= 90) || b === 45
+      );
+      if (isAsciiLang) {
+        const lang = new TextDecoder("us-ascii", { fatal: false })
+          .decode(langBytes)
+          .toLowerCase();
+        const payload = bytes.slice(1 + languageCodeLength);
+        const text = toUtf8Safe(payload, finalEncoding);
+        return { text, lang, encoding: finalEncoding };
+      }
     }
 
-    const payload = bytes.slice(1 + languageCodeLength);
-    const text = toUtf8Safe(payload, finalEncoding);
-    return { text, lang, encoding: finalEncoding };
+    return { text: directText, encoding: finalEncoding };
   } catch {
     return { text: "[Unable to decode text record]" };
   }

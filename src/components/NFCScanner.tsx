@@ -86,9 +86,8 @@ function nfcErrorCodeFromName(name?: string): NFCErrorCode {
 
 function extractTextPayloads(records: DecodedNDEFRecord[]): string[] {
   return records
-    .filter((r) => r.recordType === "text")
     .map((r) => r.data)
-    .filter(Boolean);
+    .filter((d): d is string => typeof d === "string" && d.trim().length > 0);
 }
 
 export function NFCScanner({
@@ -252,11 +251,18 @@ export function NFCScanner({
 
           let lastErr: NFCErrorCode | null = null;
           for (const text of texts) {
-            const trimmed = text.trim();
+            let trimmed = text.trim();
             if (!trimmed) continue;
-            if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+
+            // Extract JSON object if bounded by braces
+            const firstBrace = trimmed.indexOf("{");
+            const lastBrace = trimmed.lastIndexOf("}");
+            if (firstBrace >= 0 && lastBrace > firstBrace) {
+              trimmed = trimmed.slice(firstBrace, lastBrace + 1);
+            } else if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
               continue;
             }
+
             const res = parseNFCReport(trimmed, {
               nfcSerialNumber: sn !== "Not provided" ? sn : undefined,
             });
