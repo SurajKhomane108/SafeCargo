@@ -15,7 +15,7 @@ export interface LiveMonitorProps {
 }
 
 const FALLBACK_BANNER =
-  "Live data is currently unavailable. NFC/offline verification can still be used.";
+  "Live connection unavailable. Check network or Supabase credentials.";
 
 function mapDeviceSummary(raw: {
   id: string;
@@ -38,21 +38,20 @@ function mapDeviceSummary(raw: {
 function mapEvent(raw: unknown): SafeCargoEvent {
   const r = raw as {
     id?: string;
+    event_id?: number | null;
     event_type: SafeCargoEvent["type"];
     severity: SafeCargoEvent["severity"];
     measurement?: number | null;
-    duration_ms?: number | null;
     details?: unknown;
     created_at: string;
   };
   return {
     id: r.id,
+    eventId: r.event_id ?? undefined,
     type: r.event_type,
     severity: r.severity,
     measurement:
       typeof r.measurement === "number" ? r.measurement : undefined,
-    durationMs:
-      typeof r.duration_ms === "number" ? r.duration_ms : undefined,
     details:
       r.details && typeof r.details === "object"
         ? (r.details as Record<string, unknown>)
@@ -84,11 +83,11 @@ function StatBox({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-neon-line bg-neon-void/60 p-3">
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+    <div className="rounded-none border border-slate-200 bg-slate-50 p-3">
+      <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-500">
         {label}
       </p>
-      <div className="mt-1.5">{children}</div>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }
@@ -98,6 +97,8 @@ export function LiveMonitor({
   onReportLoaded,
 }: LiveMonitorProps) {
   const [devices, setDevices] = useState<DeviceSummary[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(true);
+  const [initialDevicesLoaded, setInitialDevicesLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
     initialDeviceId ?? null
   );
@@ -119,7 +120,7 @@ export function LiveMonitor({
   useEffect(() => {
     const id = setInterval(() => {
       setNowMs(Date.now());
-    }, 15_000);
+    }, 10_000);
     return () => clearInterval(id);
   }, []);
 
@@ -160,13 +161,18 @@ export function LiveMonitor({
       console.error("[SafeCargo] loadDevices failed:", e);
       setNetworkError(true);
       setError(e instanceof Error ? e.message : FALLBACK_BANNER);
+    } finally {
+      setDevicesLoading(false);
+      setInitialDevicesLoaded(true);
     }
   }, []);
 
   const loadDeviceData = useCallback(
-    async (deviceId: string) => {
+    async (deviceId: string, opts?: { silent?: boolean }) => {
       if (!deviceId) return;
-      setLoading(true);
+      if (!opts?.silent) {
+        setLoading(true);
+      }
       setError(null);
       try {
         const [reportRes, eventsRes] = await Promise.all([
@@ -182,7 +188,7 @@ export function LiveMonitor({
         if (reportRes.status === 503 || eventsRes.status === 503) {
           setNetworkError(true);
           setError(FALLBACK_BANNER);
-          setLoading(false);
+          if (!opts?.silent) setLoading(false);
           return;
         }
 
@@ -206,14 +212,18 @@ export function LiveMonitor({
         setLastFetched(new Date().toISOString());
         onReportLoaded?.(reportData, evs);
       } catch (e) {
-        console.error("[SafeCargo] loadDeviceData failed:", e);
-        setError(
-          e instanceof Error
-            ? e.message
-            : "Unable to load live data. Please try again."
-        );
+        if (!opts?.silent) {
+          console.error("[SafeCargo] loadDeviceData failed:", e);
+          setError(
+            e instanceof Error
+              ? e.message
+              : "Unable to load live data. Please try again."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!opts?.silent) {
+          setLoading(false);
+        }
       }
     },
     [onReportLoaded]
@@ -237,7 +247,7 @@ export function LiveMonitor({
         throw new Error(data.error ?? "Failed to request device reset.");
       }
       setResetFeedback(
-        "Remote reset command queued! Device will wipe on next poll (within 30s)."
+        "Remote reset queued! Device will wipe EEPROM & local memory on next poll (within 30s)."
       );
       setShowResetConfirm(false);
       await loadDevices();
@@ -249,28 +259,40 @@ export function LiveMonitor({
     }
   }, [selectedId, loadDevices, loadDeviceData]);
 
+  // Initial load
   useEffect(() => {
-    let cancelled = false;
-    const run = () => {
-      if (cancelled) return;
-      Promise.resolve()
-        .then(() => loadDevices())
-        .catch(() => {});
-    };
-    run();
-    const interval = setInterval(run, 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    loadDevices();
   }, [loadDevices]);
 
+  // When selected device changes, load immediately
   useEffect(() => {
     if (!selectedId) return;
-    Promise.resolve()
-      .then(() => loadDeviceData(selectedId))
-      .catch(() => {});
+    loadDeviceData(selectedId);
   }, [selectedId, loadDeviceData]);
+
+  // Auto-polling: Check for new telemetry & events every 4 seconds without hard refreshing!
+  useEffect(() => {
+    if (!selectedId) return;
+    const interval = setInterval(() => {
+      loadDeviceData(selectedId, { silent: true });
+    }, 4000);
+
+    // Refresh immediately when tab gains focus
+    const handleFocus = () => {
+      if (document.visibilityState === "visible") {
+        loadDeviceData(selectedId, { silent: true });
+        loadDevices();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [selectedId, loadDeviceData, loadDevices]);
 
   const online = selectedDevice
     ? selectedDevice.lastSeenAt
@@ -279,15 +301,15 @@ export function LiveMonitor({
     : null;
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-3xl neon-panel p-5 sm:p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4">
+      <div className="rounded-none border border-slate-300 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
           <div>
-            <h3 className="text-xl font-bold text-white sm:text-2xl">
-              Live Monitoring
+            <h3 className="font-mono text-base font-bold uppercase tracking-tight text-slate-900 sm:text-lg">
+              Live Fleet Monitoring
             </h3>
-            <p className="mt-1 text-sm text-slate-400">
-              Real-time data from the SafeCargo device fleet.
+            <p className="mt-0.5 text-xs text-slate-500">
+              Continuous WiFi telemetry from active cargo units. Auto-refreshes every 4s.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -296,38 +318,32 @@ export function LiveMonitor({
                 type="button"
                 onClick={() => setShowResetConfirm(true)}
                 disabled={Boolean(selectedDevice.resetPending) || loading || resetLoading}
-                className="rounded-xl border border-neon-red/40 bg-neon-red/10 px-3.5 py-2 text-xs font-bold uppercase tracking-[0.15em] text-neon-red transition hover:bg-neon-red/20 disabled:opacity-50"
+                className="rounded-none border border-rose-300 bg-rose-50 px-3 py-2 font-mono text-xs font-bold uppercase tracking-wider text-rose-800 transition hover:bg-rose-100 disabled:opacity-50"
               >
-                {selectedDevice.resetPending ? "Reset Pending…" : "Remote Reset"}
+                {selectedDevice.resetPending ? "Reset Queued" : "Remote Wipe"}
               </button>
             )}
             <button
               type="button"
               onClick={() => {
-                Promise.resolve()
-                  .then(() => loadDevices())
-                  .catch(() => {});
-                if (selectedId) {
-                  Promise.resolve()
-                    .then(() => loadDeviceData(selectedId))
-                    .catch(() => {});
-                }
+                loadDevices();
+                if (selectedId) loadDeviceData(selectedId);
               }}
               disabled={loading}
-              className="rounded-xl border border-neon-cyan/40 bg-neon-cyan/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-neon-cyan-bright transition hover:bg-neon-cyan/20 disabled:opacity-60"
+              className="rounded-none border border-slate-900 bg-slate-900 px-3.5 py-2 font-mono text-xs font-bold uppercase tracking-wider text-white transition hover:bg-slate-800 disabled:opacity-50"
             >
-              {loading ? "Refreshing…" : "Refresh"}
+              {loading ? "Syncing…" : "Refresh"}
             </button>
           </div>
         </div>
 
         {resetFeedback && (
-          <div className="mb-4 rounded-2xl border border-neon-cyan/40 bg-neon-cyan/10 p-3 text-xs text-neon-cyan-bright flex items-center justify-between">
+          <div className="mb-3.5 border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900 flex items-center justify-between font-mono">
             <span>{resetFeedback}</span>
             <button
               type="button"
               onClick={() => setResetFeedback(null)}
-              className="text-slate-400 hover:text-white ml-2 text-xs"
+              className="text-slate-500 hover:text-slate-800 ml-2 font-bold"
             >
               ✕
             </button>
@@ -335,59 +351,60 @@ export function LiveMonitor({
         )}
 
         {selectedDevice?.resetPending && (
-          <div className="mb-4 rounded-2xl border border-neon-yellow/50 bg-neon-yellow/10 p-4 text-neon-yellow shadow-[0_0_20px_rgba(250,204,21,0.15)]">
+          <div className="mb-3.5 border border-amber-400 bg-amber-50 p-3.5 text-amber-900 font-mono text-xs">
             <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-neon-yellow neon-dot-pulse" />
-              <p className="font-bold text-xs uppercase tracking-wider">
-                Remote Reset Pending (Awaiting Device Poll)
+              <span className="h-2 w-2 bg-amber-600 rounded-none animate-pulse" />
+              <p className="font-bold uppercase tracking-wider">
+                Remote Reset Queued (Awaiting Next Device Poll)
               </p>
             </div>
-            <p className="mt-1 text-xs text-slate-300">
-              Reset command queued for <strong className="text-white font-mono">{selectedDevice.id}</strong>. The device polls every 30s. On its next poll, it will wipe EEPROM, local logs, and NFC memory, restart event IDs at #1, and purge database records.
+            <p className="mt-1 text-slate-700">
+              Wipe command sent for <strong>{selectedDevice.id}</strong>. On its next 30-second poll, the device will clear EEPROM, erase NFC memory, reset boot count to #1, and purge database logs.
             </p>
           </div>
         )}
 
         {networkError && (
-          <div className="mb-5 rounded-2xl border border-neon-yellow/40 bg-neon-yellow/5 p-4 text-sm text-neon-yellow/90 shadow-[0_0_30px_-10px_rgba(250,204,21,0.4)]">
-            <p className="font-semibold">⚠ Live connection unavailable</p>
-            <p className="mt-1 opacity-90">{error ?? FALLBACK_BANNER}</p>
+          <div className="mb-4 border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 font-mono">
+            <p className="font-bold uppercase tracking-wider">Connection Notice</p>
+            <p className="mt-0.5">{error ?? FALLBACK_BANNER}</p>
           </div>
         )}
 
+        {/* Device selector - cleanly shows loading and NO temporary empty error */}
         <DeviceSelector
           devices={devices}
           selectedId={selectedId}
           onChange={(id) => setSelectedId(id)}
-          loading={loading && devices.length === 0}
+          loading={devicesLoading}
           error={
             networkError
               ? null
-              : devices.length === 0
-              ? "No devices found in database. Run the SafeCargo Supabase migration and seed SC-0001."
+              : initialDevicesLoaded && !devicesLoading && devices.length === 0
+              ? "No devices found in database. Run the Supabase migration and seed SC-0001."
               : null
           }
         />
 
         {selectedDevice && (
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <StatBox label="Connection">
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <StatBox label="Link State">
               <StatusBadge
-                label={online ? "Online" : "Offline"}
+                label={online ? "ONLINE" : "OFFLINE"}
                 variant={online ? "ONLINE" : "OFFLINE"}
                 size="sm"
                 pulse={Boolean(online)}
               />
             </StatBox>
-            <StatBox label="Status">
+            <StatBox label="Unit Status">
               <StatusBadge
                 label={selectedDevice.status ?? "NORMAL"}
                 variant={selectedDevice.status ?? "NORMAL"}
                 size="sm"
               />
             </StatBox>
-            <StatBox label="Updated">
-              <span className="font-mono text-sm text-slate-200">
+            <StatBox label="Last Heard">
+              <span className="font-mono text-xs font-semibold text-slate-800 truncate block">
                 {selectedDevice.lastSeenAt
                   ? relTime(selectedDevice.lastSeenAt, nowMs)
                   : "Never"}
@@ -397,55 +414,55 @@ export function LiveMonitor({
         )}
 
         {lastFetched && !networkError && (
-          <p className="mt-4 text-right font-mono text-[11px] text-slate-500">
-            fetched {relTime(lastFetched, nowMs)} ·{" "}
-            {new Date(lastFetched).toLocaleTimeString()}
-          </p>
+          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 font-mono text-[10px] text-slate-400">
+            <span className="flex items-center gap-1.5 text-emerald-700">
+              <span className="h-1.5 w-1.5 bg-emerald-600 rounded-none animate-pulse" />
+              Live auto-sync active (4s)
+            </span>
+            <span>
+              Updated {relTime(lastFetched, nowMs)}
+            </span>
+          </div>
         )}
       </div>
 
       {error && !networkError && (
-        <div className="rounded-2xl border border-neon-red/40 bg-neon-red/5 p-4 text-sm text-neon-red/90">
+        <div className="border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900 font-mono">
           {error}
         </div>
       )}
 
+      {/* Confirmation Modal */}
       {showResetConfirm && selectedDevice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
-          <div className="relative w-full max-w-md rounded-3xl border border-neon-red/50 bg-slate-950 p-6 shadow-[0_0_50px_rgba(239,68,68,0.3)]">
-            <div className="mb-4 flex items-center gap-2 text-neon-red">
-              <span className="text-xl">⚠</span>
-              <h4 className="text-base font-bold uppercase tracking-wider">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md border-2 border-slate-900 bg-white p-5 shadow-lg">
+            <div className="mb-3 border-b border-slate-200 pb-2">
+              <h4 className="font-mono text-base font-bold uppercase tracking-wider text-rose-700">
                 Confirm Remote Device Reset
               </h4>
             </div>
 
-            <p className="text-sm text-slate-300">
-              Are you sure you want to permanently reset device{" "}
-              <strong className="text-white font-mono">{selectedDevice.id}</strong>?
+            <p className="text-sm text-slate-700">
+              Are you sure you want to trigger a remote wipe for unit{" "}
+              <strong className="font-mono text-slate-900">{selectedDevice.id}</strong>?
             </p>
 
-            <div className="my-4 rounded-2xl border border-neon-line bg-neon-void/60 p-3.5 text-xs text-slate-400 space-y-1.5">
-              <p className="font-semibold text-slate-200">
-                This action will trigger the device to:
-              </p>
-              <ul className="list-disc pl-4 space-y-1 text-[11px]">
-                <li>Wipe all 64 stored events & local EEPROM state</li>
+            <div className="my-3.5 border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-600 space-y-1">
+              <p className="font-bold text-slate-900">Device will execute on next poll (30s):</p>
+              <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
+                <li>Wipe all stored events and local EEPROM records</li>
                 <li>Erase current ST25DV NFC tag memory</li>
-                <li>Reset boot count and restart event IDs from #1</li>
-                <li>Permanently delete cloud events and maxima in Supabase</li>
+                <li>Reset boot count and restart event IDs at #1</li>
+                <li>Delete historical events in Supabase</li>
               </ul>
-              <p className="pt-1 text-[10px] text-neon-yellow">
-                Note: The device polls every 30 seconds. The reset will execute the next time it connects.
-              </p>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setShowResetConfirm(false)}
                 disabled={resetLoading}
-                className="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
+                className="border border-slate-300 bg-white px-3.5 py-2 font-mono text-xs font-semibold text-slate-700 hover:bg-slate-100"
               >
                 Cancel
               </button>
@@ -453,9 +470,9 @@ export function LiveMonitor({
                 type="button"
                 onClick={handleRequestReset}
                 disabled={resetLoading}
-                className="rounded-xl border border-neon-red bg-neon-red/20 px-4 py-2 text-xs font-bold uppercase tracking-wider text-neon-red transition hover:bg-neon-red/30 disabled:opacity-50"
+                className="border border-rose-700 bg-rose-600 px-4 py-2 font-mono text-xs font-bold uppercase tracking-wider text-white hover:bg-rose-700 disabled:opacity-50"
               >
-                {resetLoading ? "Queueing Reset…" : "Yes, Wipe Device Data"}
+                {resetLoading ? "Queueing Wipe…" : "Confirm Remote Reset"}
               </button>
             </div>
           </div>

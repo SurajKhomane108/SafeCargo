@@ -330,113 +330,104 @@ export function NFCScanner({
   const isScanning = state === "scanning" || state === "checking";
   const statusDotColor =
     state === "scanning" || state === "checking"
-      ? "bg-neon-yellow neon-dot-pulse"
+      ? "bg-amber-500 animate-pulse"
       : state === "read_success" || state === "demo_success"
-      ? "bg-neon-green"
+      ? "bg-emerald-600"
       : state === "error"
-      ? "bg-neon-red"
-      : "bg-slate-500";
+      ? "bg-rose-600"
+      : "bg-slate-400";
 
   return (
-    <div className="relative overflow-hidden rounded-3xl neon-panel p-5 sm:p-7">
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-neon-cyan/60 to-transparent" />
-
-      <div className="mb-6">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div>
-            <h3 className="text-xl font-bold text-white sm:text-2xl">
-              NFC Report Scanner
-            </h3>
-            <p className="mt-1 text-sm text-slate-400">
-              Enable NFC on your phone and hold it close to the SafeCargo
-              ST25DV tag.
-            </p>
-          </div>
-          <StatusBadge
-            label={
-              state === "demo_success"
-                ? "DEMO MODE"
-                : state === "read_success"
-                ? "VERIFIED"
-                : isScanning
-                ? "SCANNING"
-                : state === "error"
-                ? "ERROR"
-                : "READY"
-            }
-            variant={
-              state === "demo_success"
-                ? "DEMO"
-                : state === "read_success"
-                ? "NFC"
-                : isScanning
-                ? "MEDIUM"
-                : state === "error"
-                ? "CRITICAL"
-                : "LOW"
-            }
-            size="sm"
-            pulse={isScanning}
-          />
+    <div className="rounded-none border border-slate-300 bg-white p-4 sm:p-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+          <h3 className="font-mono text-base font-bold uppercase tracking-tight text-slate-900 sm:text-lg">
+            NFC Scanner
+          </h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Hold your mobile device against the SafeCargo ST25DV NFC tag.
+          </p>
         </div>
+        <StatusBadge
+          label={
+            state === "demo_success"
+              ? "DEMO"
+              : state === "read_success"
+              ? "READ COMPLETE"
+              : isScanning
+              ? "SEARCHING"
+              : state === "error"
+              ? "ERROR"
+              : "READY"
+          }
+          variant={
+            state === "demo_success"
+              ? "DEMO"
+              : state === "read_success"
+              ? "NFC"
+              : isScanning
+              ? "MEDIUM"
+              : state === "error"
+              ? "CRITICAL"
+              : "LOW"
+          }
+          size="sm"
+          pulse={isScanning}
+        />
       </div>
 
-      {/* Scan CTA */}
+      {/* Scan CTA - Mobile Touch Target */}
       <button
         type="button"
         onClick={scanNFC}
         disabled={isScanning}
-        className={`neon-btn-cyan relative w-full overflow-hidden rounded-2xl px-6 py-5 text-lg font-extrabold tracking-widest uppercase ${
-          isScanning ? "scan-line" : ""
-        }`}
+        className={`w-full rounded-none border border-slate-900 bg-slate-900 px-5 py-4 text-center font-mono text-sm font-bold uppercase tracking-widest text-white transition hover:bg-slate-800 active:bg-black disabled:cursor-not-allowed disabled:bg-slate-300 disabled:border-slate-300 disabled:text-slate-500`}
       >
-        <span className="relative z-10 inline-flex items-center justify-center gap-2">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <span className="inline-flex items-center justify-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
               d="M8 3a9 9 0 000 18M16 3a9 9 0 010 18M11 6.5a5.5 5.5 0 000 11M13 6.5a5.5 5.5 0 010 11"
               stroke="currentColor"
               strokeWidth="2.2"
-              strokeLinecap="round"
+              strokeLinecap="square"
             />
           </svg>
-          {isScanning ? "Scanning NFC…" : "Scan NFC Report"}
+          {isScanning ? "Waiting for NFC Tag…" : "Scan NFC Cargo Tag"}
         </span>
       </button>
 
-      {/* Instructions */}
-      <div className="mt-5 grid gap-2 border border-dashed border-neon-line/70 rounded-2xl p-4 text-[13px] text-slate-300 sm:grid-cols-4 sm:gap-3">
+      {/* Mobile-Friendly Steps */}
+      <div className="mt-4 grid grid-cols-2 gap-2 border border-slate-200 bg-slate-50 p-3 text-[12px] text-slate-600 sm:grid-cols-4">
         {[
-          ["1", "Enable NFC on your phone."],
-          ["2", "Tap the button above."],
-          ["3", "Hold near the ST25DV tag."],
-          ["4", "Wait for verification."],
+          ["1", "Turn on NFC"],
+          ["2", "Tap scan button"],
+          ["3", "Tap tag to phone"],
+          ["4", "View report"],
         ].map(([n, s]) => (
-          <div key={n} className="flex items-start gap-2">
-            <span className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full border border-neon-cyan/50 text-[11px] font-bold text-neon-cyan-bright">
+          <div key={n} className="flex items-center gap-1.5 font-mono">
+            <span className="flex h-4 w-4 flex-none items-center justify-center bg-slate-200 text-[10px] font-bold text-slate-700">
               {n}
             </span>
-            <span className="leading-5">{s}</span>
+            <span className="text-[11px] leading-tight text-slate-700">{s}</span>
           </div>
         ))}
       </div>
 
       {/* Status line */}
-      <div className="mt-5 rounded-xl border border-neon-line bg-neon-void/70 p-4">
-        <div className="flex items-center gap-3">
-          <div className={`h-3 w-3 flex-none rounded-full ${statusDotColor}`} />
-          <p className="text-sm leading-6 text-slate-200">{status}</p>
+      <div className="mt-3.5 border border-slate-200 bg-white p-3">
+        <div className="flex items-center gap-2.5">
+          <div className={`h-2.5 w-2.5 flex-none rounded-none ${statusDotColor}`} />
+          <p className="font-mono text-xs text-slate-700">{status}</p>
         </div>
       </div>
 
-      {/* Error */}
+      {/* Error Message */}
       {errorCode && (
-        <div className="mt-5 rounded-2xl border border-neon-red/40 bg-neon-red/5 p-4 shadow-[0_0_30px_-10px_rgba(239,68,68,0.45)]">
-          <div className="mb-1 flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neon-red/90">
-              Error · {errorCode}
-            </span>
-          </div>
-          <p className="text-sm leading-6 text-neon-red-200/90 text-neon-red/90">
+        <div className="mt-3.5 border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900">
+          <p className="font-mono font-bold uppercase tracking-wider text-[11px]">
+            Scan Notice · {errorCode}
+          </p>
+          <p className="mt-1 font-mono text-[11px] leading-relaxed">
             {NFC_ERROR_MESSAGES[errorCode]}
           </p>
         </div>
@@ -444,104 +435,52 @@ export function NFCScanner({
 
       {/* Demo verified card */}
       {demo && state === "demo_success" && (
-        <div className="mt-6 rounded-3xl neon-border-purple p-5 sm:p-6 bg-neon-void/40">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-5 border border-purple-300 bg-purple-50/50 p-4">
+          <div className="mb-3 flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-neon-purple">
-                Demo Verification
+              <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-purple-700">
+                Diagnostic Tag Verified
               </p>
-              <h4 className="mt-1 text-2xl font-extrabold text-white sm:text-3xl neon-text-glow-magenta">
-                Demo NFC Verified
+              <h4 className="font-mono text-base font-bold text-slate-900">
+                Demo ST25DV Tag Detected
               </h4>
             </div>
-            <StatusBadge label="DEMO" variant="DEMO" size="md" pulse />
+            <StatusBadge label="DEMO" variant="DEMO" size="sm" />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <InfoBox label="NFC Serial Number" value={demo.serialNumber} />
-            <InfoBox
-              label="Records Detected"
-              value={String(demo.records.length)}
-            />
+            <InfoBox label="Records Read" value={String(demo.records.length)} />
           </div>
 
-          <div className="mt-4 rounded-2xl border border-neon-line bg-black/60 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-              Tag Message
+          <div className="mt-3 border border-slate-200 bg-white p-3">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Payload String
             </p>
-            <p className="mt-2 font-mono text-sm text-neon-purple-200 text-neon-purple">
+            <p className="mt-1 font-mono text-xs text-purple-900 break-all">
               {demo.rawMessage}
             </p>
           </div>
-
-          <p className="mt-4 text-xs leading-6 text-slate-400">
-            This tag contains a demo string. It confirms NFC → ST25DV → Chrome
-            → SafeCargo is working. It is{" "}
-            <span className="font-semibold text-slate-300">not</span> a real
-            cargo monitoring report.
-          </p>
         </div>
       )}
 
-      {/* NFC Report inline success + raw records */}
+      {/* NFC Report Success Banner */}
       {report && state === "read_success" && (
-        <div className="mt-6 rounded-3xl neon-border-cyan p-5 sm:p-6 bg-neon-void/40">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-5 border border-emerald-300 bg-emerald-50/50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-neon-cyan-bright">
-                NFC Verification
+              <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-emerald-800">
+                Direct NFC Verification
               </p>
-              <h4 className="mt-1 text-2xl font-extrabold text-white sm:text-3xl neon-text-glow-cyan">
-                NFC Report Verified
+              <h4 className="font-mono text-base font-bold text-slate-900">
+                Cargo Tag Verified: {report.deviceId}
               </h4>
             </div>
-            <StatusBadge label="NFC VERIFIED" variant="NFC" size="md" pulse />
+            <StatusBadge label="VERIFIED" variant="NORMAL" size="sm" />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <InfoBox label="NFC Serial Number" value={serialNumber || "—"} />
-            <InfoBox
-              label="NDEF Records"
-              value={String(records.length)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Records inspector (always show after success) */}
-      {(demo || report) && records.length > 0 && (
-        <div className="mt-6 rounded-3xl border border-neon-line bg-neon-void/50 p-5 sm:p-6">
-          <h4 className="mb-4 text-sm font-bold uppercase tracking-[0.2em] text-slate-300">
-            Raw NDEF Records
-          </h4>
-          <div className="space-y-3">
-            {records.map((r, i) => (
-              <div
-                key={i}
-                className="rounded-2xl border border-neon-line bg-black/50 p-4"
-              >
-                <div className="mb-3 flex flex-wrap gap-2">
-                  <span className="rounded-full bg-neon-panel px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-300">
-                    Record {i + 1}
-                  </span>
-                  <span className="rounded-full bg-neon-cyan/10 border border-neon-cyan/30 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-neon-cyan-bright">
-                    {r.recordType}
-                  </span>
-                  {r.mediaType && (
-                    <span className="rounded-full bg-neon-purple/10 border border-neon-purple/30 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-neon-purple">
-                      {r.mediaType}
-                    </span>
-                  )}
-                  {r.lang && (
-                    <span className="rounded-full bg-neon-green/10 border border-neon-green/30 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-neon-green">
-                      lang {r.lang}
-                    </span>
-                  )}
-                </div>
-                <pre className="max-h-56 overflow-auto scrollbar-thin whitespace-pre-wrap break-words rounded-xl border border-neon-line bg-neon-black/80 p-3 font-mono text-xs leading-6 text-slate-200">
-                  {r.data}
-                </pre>
-              </div>
-            ))}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <InfoBox label="Tag UID" value={serialNumber || "—"} />
+            <InfoBox label="Payload Records" value={String(records.length)} />
           </div>
         </div>
       )}
@@ -551,11 +490,11 @@ export function NFCScanner({
 
 function InfoBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-neon-line bg-neon-black/60 p-4">
-      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+    <div className="border border-slate-200 bg-white p-2.5">
+      <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-500">
         {label}
       </p>
-      <p className="mt-2 break-all font-mono text-sm text-slate-200">
+      <p className="mt-1 break-all font-mono text-xs font-semibold text-slate-900">
         {value}
       </p>
     </div>

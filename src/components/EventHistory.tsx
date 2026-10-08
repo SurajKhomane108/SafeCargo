@@ -1,12 +1,17 @@
 import type { SafeCargoEvent } from "@/lib/types";
 import { StatusBadge } from "./StatusBadge";
 
-function formatTimestamp(iso: string): string {
+function formatTimestamp(ev: SafeCargoEvent): string {
+  if (ev.timeValid === false || ev.timestamp === "UNSYNCED" || !ev.timestamp) {
+    if (ev.boot !== undefined || ev.uptimeSec !== undefined) {
+      return `Unsynced (Boot ${ev.boot ?? "?"}, +${ev.uptimeSec ?? 0}s)`;
+    }
+    return "Clock Unsynchronized";
+  }
   try {
-    const d = new Date(iso);
-    if (!Number.isFinite(d.getTime())) return iso;
+    const d = new Date(ev.timestamp);
+    if (!Number.isFinite(d.getTime())) return ev.timestamp;
     return d.toLocaleString(undefined, {
-      year: "numeric",
       month: "short",
       day: "2-digit",
       hour: "2-digit",
@@ -14,7 +19,7 @@ function formatTimestamp(iso: string): string {
       second: "2-digit",
     });
   } catch {
-    return iso;
+    return ev.timestamp;
   }
 }
 
@@ -47,163 +52,101 @@ function formatMeasurement(ev: SafeCargoEvent): string {
   }
 }
 
-function measurementAccent(type: SafeCargoEvent["type"]): string {
-  switch (type) {
-    case "SHOCK":
-      return "text-neon-magenta";
-    case "TILT":
-      return "text-neon-orange";
-    case "MOTION":
-      return "text-neon-purple";
-    case "LIGHT":
-      return "text-neon-yellow";
-    default:
-      return "text-slate-300";
-  }
-}
-
 export function EventHistory({ events }: { events: SafeCargoEvent[] }) {
   if (!events || events.length === 0) {
     return (
-      <div className="rounded-3xl neon-panel p-6">
-        <h3 className="mb-1 text-lg font-bold text-white">Event History</h3>
-        <p className="mb-4 text-sm text-slate-400">
-          Chronological timeline of cargo events.
+      <div className="rounded-none border border-slate-300 bg-white p-4 sm:p-6">
+        <h3 className="font-mono text-base font-bold uppercase tracking-tight text-slate-900">
+          Incident Audit History
+        </h3>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Chronological record of physical cargo events.
         </p>
-        <div className="rounded-2xl border border-dashed border-neon-line bg-neon-void/40 p-8 text-center text-sm text-slate-500">
-          No events yet. Your cargo is in good shape.
+        <div className="mt-4 border border-dashed border-slate-300 bg-slate-50 p-6 text-center font-mono text-xs text-slate-500">
+          No incident events recorded. Cargo maintained pristine transit conditions.
         </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-3xl neon-panel p-5 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+    <div className="rounded-none border border-slate-300 bg-white p-4 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
         <div>
-          <h3 className="text-lg font-bold text-white">Event History</h3>
-          <p className="text-sm text-slate-400">
-            {events.length} event{events.length === 1 ? "" : "s"} · newest first
+          <h3 className="font-mono text-base font-bold uppercase tracking-tight text-slate-900">
+            Incident Audit History
+          </h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Complete sequential log · newest recorded first
           </p>
         </div>
+        <span className="font-mono text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300 px-2 py-0.5">
+          {events.length} {events.length === 1 ? "Incident" : "Incidents"}
+        </span>
       </div>
 
-      <ol className="relative space-y-3 border-l border-neon-line/80 pl-6">
-        {events.map((ev, idx) => (
-          <li key={ev.id ?? `${ev.timestamp}-${ev.type}-${idx}`} className="relative">
-            <span
-              className="absolute -left-[33px] top-3 flex h-4 w-4 items-center justify-center rounded-full border-2 border-neon-void"
-              style={{
-                background:
-                  ev.severity === "CRITICAL"
-                    ? "#ef4444"
-                    : ev.severity === "HIGH"
-                    ? "#ec4899"
-                    : ev.severity === "MEDIUM"
-                    ? "#facc15"
-                    : "#22d3ee",
-                boxShadow: "0 0 10px currentColor",
-                color:
-                  ev.severity === "CRITICAL"
-                    ? "#ef4444"
-                    : ev.severity === "HIGH"
-                    ? "#ec4899"
-                    : ev.severity === "MEDIUM"
-                    ? "#facc15"
-                    : "#22d3ee",
-              }}
-            />
-            <div className="rounded-2xl border border-neon-line bg-neon-void/50 p-4 backdrop-blur-sm transition hover:border-neon-cyan/40">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <div className="space-y-2.5">
+        {events.map((ev, idx) => {
+          const eventNum = ev.eventId !== undefined ? ev.eventId : events.length - idx;
+          return (
+            <div
+              key={ev.id ?? `${ev.timestamp}-${ev.type}-${idx}`}
+              className="border border-slate-200 bg-slate-50/50 p-3 transition hover:border-slate-400 hover:bg-white"
+            >
+              {/* Event Header row */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge
-                    label={ev.type}
-                    variant={
-                      ev.severity === "LOW"
-                        ? "LOW"
-                        : ev.severity === "MEDIUM"
-                        ? "MEDIUM"
-                        : ev.severity === "HIGH"
-                        ? "HIGH"
-                        : "CRITICAL"
-                    }
-                    size="sm"
-                  />
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    {ev.severity}
+                  <span className="font-mono text-xs font-bold text-slate-900 bg-white border border-slate-300 px-1.5 py-0.5">
+                    #{eventNum}
                   </span>
+                  <StatusBadge label={ev.type} variant={ev.type} size="sm" />
+                  <StatusBadge label={ev.severity} variant={ev.severity} size="sm" />
                   {ev.logState && (
-                    <StatusBadge
-                      label={
-                        ev.logState === "SENT"
-                          ? "CLOUD SYNCED"
-                          : ev.logState === "DROPPED"
-                          ? "DROPPED"
-                          : "PENDING SYNC"
-                      }
-                      variant={ev.logState}
-                      size="sm"
-                    />
+                    <span className="font-mono text-[10px] text-slate-500">
+                      [{ev.logState === "SENT" ? "Delivered" : ev.logState === "DROPPED" ? "Dropped" : "Tag Buffer"}]
+                    </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-400">
-                  {ev.timeValid === false ? (
-                    <span className="text-neon-yellow">Unsynchronized Clock</span>
-                  ) : (
-                    <>
-                      <span>{formatTimestamp(ev.timestamp)}</span>
-                      {ev.timeEstimated && (
-                        <span className="text-[10px] text-slate-500 italic">
-                          (est.)
-                        </span>
-                      )}
-                    </>
-                  )}
+
+                <div className="font-mono text-[11px] text-slate-500">
+                  {formatTimestamp(ev)}
                 </div>
               </div>
-              <div className="grid gap-3 text-sm sm:grid-cols-3">
+
+              {/* Event Metrics row (NO DURATION) */}
+              <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3 font-mono text-xs">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-                    Measurement
-                  </p>
-                  <p
-                    className={`mt-1 font-mono text-base font-bold ${measurementAccent(
-                      ev.type
-                    )}`}
-                  >
+                  <span className="text-[10px] text-slate-500 uppercase block">
+                    Recorded Impact / Value
+                  </span>
+                  <span className="font-bold text-slate-900 text-sm">
                     {formatMeasurement(ev)}
-                  </p>
+                  </span>
                 </div>
+
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-                    Duration
-                  </p>
-                  <p className="mt-1 font-mono text-base font-bold text-slate-200">
-                    {ev.durationMs !== undefined && ev.durationMs !== null
-                      ? `${ev.durationMs} ms`
-                      : "—"}
-                  </p>
+                  <span className="text-[10px] text-slate-500 uppercase block">
+                    Telemetry Type
+                  </span>
+                  <span className="text-slate-700 font-semibold">
+                    {ev.type}
+                  </span>
                 </div>
+
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-                    {ev.eventId !== undefined ? "Event ID" : "Index"}
-                  </p>
-                  <p className="mt-1 font-mono text-base font-bold text-slate-300">
-                    {ev.eventId !== undefined ? `#${ev.eventId}` : `#${events.length - idx}`}
-                  </p>
+                  <span className="text-[10px] text-slate-500 uppercase block">
+                    Hardware Cycle
+                  </span>
+                  <span className="text-slate-600">
+                    {ev.boot !== undefined ? `Boot #${ev.boot}` : "—"}
+                    {ev.uptimeSec !== undefined ? ` (+${ev.uptimeSec}s)` : ""}
+                  </span>
                 </div>
               </div>
-              {ev.details &&
-                typeof ev.details === "object" &&
-                Object.keys(ev.details).length > 0 && (
-                  <pre className="mt-3 max-h-32 overflow-auto scrollbar-thin whitespace-pre-wrap break-words rounded-xl border border-neon-line bg-black/60 p-3 font-mono text-[11px] leading-5 text-slate-400">
-                    {JSON.stringify(ev.details, null, 2)}
-                  </pre>
-                )}
             </div>
-          </li>
-        ))}
-      </ol>
+          );
+        })}
+      </div>
     </div>
   );
 }

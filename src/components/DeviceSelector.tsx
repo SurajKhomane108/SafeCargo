@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useId, useMemo } from "react";
 import type { DeviceSummary } from "@/lib/types";
@@ -31,16 +31,16 @@ export function DeviceSelector({
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1.5">
       <label
         htmlFor={selectorId}
-        className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400"
+        className="block font-mono text-[11px] font-bold uppercase tracking-wider text-slate-600"
       >
-        Device
+        Select Monitored Device
       </label>
 
-      {error && (
-        <div className="rounded-xl border border-neon-red/40 bg-neon-red/5 p-3 text-sm text-neon-red/90">
+      {error && !loading && (
+        <div className="border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 font-mono">
           {error}
         </div>
       )}
@@ -51,28 +51,28 @@ export function DeviceSelector({
           value={selectedId ?? ""}
           onChange={(e) => onChange(e.target.value)}
           disabled={loading || !hasList}
-          className="w-full appearance-none rounded-2xl border border-neon-cyan/30 bg-neon-void/80 px-4 py-3.5 pr-11 font-mono text-sm text-white shadow-[0_0_20px_-10px_rgba(34,211,238,0.4)] backdrop-blur-md outline-none transition focus:border-neon-cyan/80 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full appearance-none rounded-none border border-slate-300 bg-white px-3.5 py-3 pr-10 font-mono text-sm text-slate-900 outline-none transition focus:border-slate-800 focus:ring-1 focus:ring-slate-800 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
         >
-          {loading && <option>Loading devices…</option>}
-          {!loading && !hasList && <option>No devices available</option>}
+          {loading && <option>Connecting to device fleet…</option>}
+          {!loading && !hasList && <option>No active devices found</option>}
           {sorted.map((d) => (
-            <option key={d.id} value={d.id} className="bg-neon-black">
+            <option key={d.id} value={d.id}>
               {d.id}
-              {d.name ? ` · ${d.name}` : ""}
+              {d.name ? ` — ${d.name}` : ""}
               {d.lastSeenAt
-                ? ` · last seen ${new Date(d.lastSeenAt).toLocaleString(undefined, { hour: "2-digit", minute: "2-digit" })}`
-                : " · never"}
+                ? ` (seen ${new Date(d.lastSeenAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`
+                : " (offline)"}
             </option>
           ))}
         </select>
-        <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-neon-cyan">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
-              d="M7 10l5 5 5-5"
+              d="M6 9l6 6 6-6"
               stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              strokeWidth="2.5"
+              strokeLinecap="square"
+              strokeLinejoin="miter"
             />
           </svg>
         </div>

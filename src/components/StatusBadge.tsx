@@ -1,5 +1,6 @@
 import type {
   SafeCargoEventSeverity,
+  SafeCargoEventType,
   SafeCargoLogState,
   SafeCargoReportStatus,
 } from "@/lib/types";
@@ -7,6 +8,7 @@ import type {
 type BadgeVariant =
   | SafeCargoReportStatus
   | SafeCargoEventSeverity
+  | SafeCargoEventType
   | SafeCargoLogState
   | "DEMO"
   | "NFC"
@@ -14,28 +16,133 @@ type BadgeVariant =
   | "ONLINE"
   | "OFFLINE";
 
-const STATUS_STYLES: Record<BadgeVariant, {
-  text: string;
-  bg: string;
-  border: string;
-  glow?: string;
-}> = {
-  NORMAL:   { text: "text-neon-green",  bg: "bg-neon-green/10",  border: "border-neon-green/40", glow: "0 0 16px rgba(34,197,94,0.45)" },
-  LOW:      { text: "text-neon-cyan-bright", bg: "bg-neon-cyan/10",   border: "border-neon-cyan/40",  glow: "0 0 14px rgba(34,211,238,0.40)" },
-  MEDIUM:   { text: "text-neon-yellow",bg: "bg-neon-yellow/10", border: "border-neon-yellow/40",glow: "0 0 14px rgba(250,204,21,0.40)" },
-  WARNING:  { text: "text-neon-orange",bg: "bg-neon-orange/10", border: "border-neon-orange/40",glow: "0 0 16px rgba(249,115,22,0.45)" },
-  HIGH:     { text: "text-neon-magenta",bg: "bg-neon-magenta/10",border: "border-neon-magenta/40",glow: "0 0 18px rgba(236,72,153,0.50)" },
-  CRITICAL: { text: "text-neon-red",   bg: "bg-neon-red/10",    border: "border-neon-red/40",   glow: "0 0 20px rgba(239,68,68,0.55)" },
+const STATUS_STYLES: Record<
+  BadgeVariant,
+  {
+    text: string;
+    bg: string;
+    border: string;
+    dotBg?: string;
+  }
+> = {
+  NORMAL: {
+    text: "text-emerald-800",
+    bg: "bg-emerald-50",
+    border: "border-emerald-300",
+    dotBg: "bg-emerald-600",
+  },
+  LOW: {
+    text: "text-sky-800",
+    bg: "bg-sky-50",
+    border: "border-sky-300",
+    dotBg: "bg-sky-600",
+  },
+  MEDIUM: {
+    text: "text-amber-800",
+    bg: "bg-amber-50",
+    border: "border-amber-300",
+    dotBg: "bg-amber-600",
+  },
+  WARNING: {
+    text: "text-amber-900",
+    bg: "bg-amber-100",
+    border: "border-amber-400",
+    dotBg: "bg-amber-600",
+  },
+  HIGH: {
+    text: "text-rose-800",
+    bg: "bg-rose-50",
+    border: "border-rose-300",
+    dotBg: "bg-rose-600",
+  },
+  CRITICAL: {
+    text: "text-red-900",
+    bg: "bg-red-100",
+    border: "border-red-400",
+    dotBg: "bg-red-600",
+  },
 
-  DEMO:     { text: "text-neon-purple",   bg: "bg-neon-purple/10", border: "border-neon-purple/40",   glow: "0 0 16px rgba(168,85,247,0.45)" },
-  NFC:      { text: "text-neon-cyan-bright",   bg: "bg-neon-cyan/10",   border: "border-neon-cyan/40",    glow: "0 0 16px rgba(34,211,238,0.50)" },
-  LIVE:     { text: "text-neon-lime",   bg: "bg-neon-lime/10",   border: "border-neon-lime/40",    glow: "0 0 16px rgba(132,204,22,0.45)" },
-  ONLINE:   { text: "text-neon-green",  bg: "bg-neon-green/10",  border: "border-neon-green/40",   glow: "0 0 12px rgba(34,197,94,0.40)" },
-  OFFLINE:  { text: "text-slate-400",   bg: "bg-slate-600/10",   border: "border-slate-500/40" },
+  // Event Types
+  SHOCK: {
+    text: "text-rose-900",
+    bg: "bg-rose-100",
+    border: "border-rose-300",
+    dotBg: "bg-rose-600",
+  },
+  TILT: {
+    text: "text-orange-900",
+    bg: "bg-orange-100",
+    border: "border-orange-300",
+    dotBg: "bg-orange-600",
+  },
+  MOTION: {
+    text: "text-purple-900",
+    bg: "bg-purple-100",
+    border: "border-purple-300",
+    dotBg: "bg-purple-600",
+  },
+  LIGHT: {
+    text: "text-amber-900",
+    bg: "bg-amber-100",
+    border: "border-amber-300",
+    dotBg: "bg-amber-600",
+  },
+  NONE: {
+    text: "text-slate-600",
+    bg: "bg-slate-100",
+    border: "border-slate-300",
+    dotBg: "bg-slate-400",
+  },
 
-  PENDING:  { text: "text-neon-yellow", bg: "bg-neon-yellow/10", border: "border-neon-yellow/40", glow: "0 0 12px rgba(250,204,21,0.35)" },
-  SENT:     { text: "text-neon-cyan-bright", bg: "bg-neon-cyan/10", border: "border-neon-cyan/40", glow: "0 0 12px rgba(34,211,238,0.35)" },
-  DROPPED:  { text: "text-neon-red",    bg: "bg-neon-red/10",    border: "border-neon-red/40",    glow: "0 0 12px rgba(239,68,68,0.35)" },
+  DEMO: {
+    text: "text-purple-800",
+    bg: "bg-purple-50",
+    border: "border-purple-300",
+    dotBg: "bg-purple-600",
+  },
+  NFC: {
+    text: "text-blue-800",
+    bg: "bg-blue-50",
+    border: "border-blue-300",
+    dotBg: "bg-blue-600",
+  },
+  LIVE: {
+    text: "text-emerald-800",
+    bg: "bg-emerald-50",
+    border: "border-emerald-300",
+    dotBg: "bg-emerald-600",
+  },
+  ONLINE: {
+    text: "text-emerald-800",
+    bg: "bg-emerald-50",
+    border: "border-emerald-300",
+    dotBg: "bg-emerald-600",
+  },
+  OFFLINE: {
+    text: "text-slate-600",
+    bg: "bg-slate-100",
+    border: "border-slate-300",
+    dotBg: "bg-slate-400",
+  },
+
+  PENDING: {
+    text: "text-amber-800",
+    bg: "bg-amber-50",
+    border: "border-amber-300",
+    dotBg: "bg-amber-500",
+  },
+  SENT: {
+    text: "text-blue-800",
+    bg: "bg-blue-50",
+    border: "border-blue-300",
+    dotBg: "bg-blue-600",
+  },
+  DROPPED: {
+    text: "text-rose-800",
+    bg: "bg-rose-50",
+    border: "border-rose-300",
+    dotBg: "bg-rose-600",
+  },
 };
 
 export function StatusBadge({
@@ -51,18 +158,19 @@ export function StatusBadge({
 }) {
   const s = STATUS_STYLES[variant] ?? STATUS_STYLES.NORMAL;
   const padding =
-    size === "sm" ? "px-2 py-0.5 text-[10px]" :
-    size === "lg" ? "px-4 py-1.5 text-sm" :
-    "px-3 py-1 text-xs";
+    size === "sm"
+      ? "px-2 py-0.5 text-[10px]"
+      : size === "lg"
+      ? "px-3.5 py-1.5 text-xs"
+      : "px-2.5 py-1 text-[11px]";
+
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border ${s.border} ${s.bg} ${s.text} ${padding} font-semibold uppercase tracking-wider`}
-      style={s.glow ? { boxShadow: s.glow } : undefined}
+      className={`inline-flex items-center gap-1.5 rounded-none border ${s.border} ${s.bg} ${s.text} ${padding} font-mono font-bold uppercase tracking-wider`}
     >
       {pulse && (
         <span
-          className="h-2 w-2 rounded-full neon-dot-pulse"
-          style={{ background: "currentColor", color: "currentColor" }}
+          className={`h-1.5 w-1.5 rounded-none ${s.dotBg ?? "bg-current"} animate-pulse`}
         />
       )}
       {label}

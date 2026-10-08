@@ -66,10 +66,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#030712" },
-    { media: "(prefers-color-scheme: light)", color: "#030712" },
-  ],
+  themeColor: "#f8fafc",
 };
 
 export default function RootLayout({
@@ -80,10 +77,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${inter.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
       <body
-        className="antialiased min-h-screen bg-neon-black"
+        className="antialiased min-h-screen bg-slate-50 text-slate-900"
         style={{ fontFamily: "var(--font-inter), var(--font-sans)" }}
       >
         {children}

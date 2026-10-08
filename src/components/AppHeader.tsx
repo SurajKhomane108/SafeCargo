@@ -1,4 +1,4 @@
-﻿import { StatusBadge } from "./StatusBadge";
+import { StatusBadge } from "./StatusBadge";
 import type { SafeCargoReportSource } from "@/lib/types";
 
 export function AppHeader({
@@ -16,8 +16,8 @@ export function AppHeader({
       : source === "DEMO"
       ? "NFC DEMO"
       : source === "LIVE"
-      ? "LIVE MONITORING"
-      : "AWAITING INPUT";
+      ? "LIVE TELEMETRY"
+      : "STANDBY";
   const sourceVariant =
     source === "NFC"
       ? "NFC"
@@ -28,44 +28,39 @@ export function AppHeader({
       : "OFFLINE";
 
   return (
-    <header className="relative mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3.5">
-        <div
-          className="relative flex h-12 w-12 flex-none items-center justify-center rounded-2xl font-black text-neon-void"
-          style={{
-            background:
-              "linear-gradient(135deg, #22d3ee 0%, #a855f7 60%, #ec4899 100%)",
-            boxShadow:
-              "0 0 24px rgba(34,211,238,0.45), 0 0 44px rgba(168,85,247,0.35)",
-          }}
-        >
-          <span className="text-xl tracking-tight">SC</span>
-          <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-white/20" />
+    <header className="mb-6 flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 flex-none items-center justify-center rounded-none bg-slate-900 text-white font-mono text-sm font-bold tracking-tight">
+          SC
         </div>
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-white sm:text-2xl">
-            <span className="neon-text-glow-cyan">Safe</span>
-            <span className="neon-text-glow-magenta">Cargo</span>
-          </h1>
-          <p className="text-xs text-slate-400 sm:text-sm">
-            Intelligent Cargo Monitoring
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl font-mono uppercase">
+              SafeCargo
+            </h1>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-slate-400 border border-slate-200 px-1.5 py-0.5">
+              v1.0
+            </span>
+          </div>
+          <p className="text-xs text-slate-500">
+            Chain-of-Custody & Cargo Integrity Platform
           </p>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge label={sourceLabel} variant={sourceVariant} size="md" />
+      <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
+        <StatusBadge label={sourceLabel} variant={sourceVariant} size="sm" />
         {source === "LIVE" && (
           <StatusBadge
             label={online ? "ONLINE" : "OFFLINE"}
             variant={online ? "ONLINE" : "OFFLINE"}
-            size="md"
+            size="sm"
             pulse={Boolean(online)}
           />
         )}
         {source === "LIVE" && lastSeenAt && (
-          <span className="rounded-full border border-neon-line bg-neon-panel/70 px-3 py-1 font-mono text-[11px] text-slate-300">
-            last seen {formatRel(lastSeenAt)}
+          <span className="border border-slate-200 bg-white px-2 py-0.5 font-mono text-[11px] text-slate-600">
+            seen {formatRel(lastSeenAt)}
           </span>
         )}
       </div>
