@@ -6,9 +6,15 @@ export type SafeCargoReportStatus =
   | "HIGH"
   | "CRITICAL";
 
-export type SafeCargoEventType = "SHOCK" | "TILT" | "MOTION" | "LIGHT";
+export type SafeCargoEventType = "SHOCK" | "TILT" | "MOTION" | "LIGHT" | "NONE";
 
-export type SafeCargoEventSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type SafeCargoEventSeverity =
+  | "NORMAL"
+  | "LOW"
+  | "MEDIUM"
+  | "WARNING"
+  | "HIGH"
+  | "CRITICAL";
 
 export type SafeCargoReportSource = "NFC" | "LIVE" | "DEMO";
 
@@ -101,10 +107,14 @@ export function severityToStatus(
   severity: SafeCargoEventSeverity
 ): SafeCargoReportStatus {
   switch (severity) {
+    case "NORMAL":
+      return "NORMAL";
     case "LOW":
       return "LOW";
     case "MEDIUM":
       return "MEDIUM";
+    case "WARNING":
+      return "WARNING";
     case "HIGH":
       return "HIGH";
     case "CRITICAL":

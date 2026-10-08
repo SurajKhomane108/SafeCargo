@@ -10,7 +10,11 @@
 --   4. Adds pending_events counter column to public.devices
 -- ================================================================
 
--- 1. Add firmware-specific columns to public.events if they don't exist
+-- 1. Ensure cargo_severity enum includes WARNING and NORMAL
+ALTER TYPE cargo_severity ADD VALUE IF NOT EXISTS 'WARNING';
+ALTER TYPE cargo_severity ADD VALUE IF NOT EXISTS 'NORMAL';
+
+-- 2. Add firmware-specific columns to public.events if they don't exist
 ALTER TABLE public.events
   ADD COLUMN IF NOT EXISTS event_id        INTEGER,
   ADD COLUMN IF NOT EXISTS time_valid      BOOLEAN NOT NULL DEFAULT TRUE,

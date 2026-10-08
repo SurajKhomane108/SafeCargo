@@ -42,6 +42,8 @@ function formatMeasurement(ev: SafeCargoEvent): string {
       return `${n}°/s`;
     case "LIGHT":
       return `${n} LDR`;
+    default:
+      return `${n}`;
   }
 }
 
@@ -55,6 +57,8 @@ function measurementAccent(type: SafeCargoEvent["type"]): string {
       return "text-neon-purple";
     case "LIGHT":
       return "text-neon-yellow";
+    default:
+      return "text-slate-300";
   }
 }
 

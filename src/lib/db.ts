@@ -212,12 +212,24 @@ export async function insertEvent(
     row.created_at = input.timestamp;
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("events")
     .insert(row)
     .select()
     .limit(1)
     .maybeSingle();
+
+  if (error && error.message?.includes("cargo_severity") && (row.severity === "WARNING" || row.severity === "NORMAL")) {
+    row.severity = row.severity === "WARNING" ? "HIGH" : "LOW";
+    const retry = await supabase
+      .from("events")
+      .insert(row)
+      .select()
+      .limit(1)
+      .maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     // Concurrent retry protection: if unique constraint violation (code 23505) occurs

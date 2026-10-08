@@ -16,11 +16,14 @@ export const safeCargoEventTypeEnum = z.enum([
   "TILT",
   "MOTION",
   "LIGHT",
+  "NONE",
 ]);
 
 export const safeCargoSeverityEnum = z.enum([
+  "NORMAL",
   "LOW",
   "MEDIUM",
+  "WARNING",
   "HIGH",
   "CRITICAL",
 ]);

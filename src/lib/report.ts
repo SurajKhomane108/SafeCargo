@@ -97,19 +97,24 @@ export function parseNFCReport(
 
   const timeValid = p.timeValid ?? true;
 
-  const latestEvent: SafeCargoEvent | null = p.last
-    ? {
-        id: p.last.id !== undefined && p.last.id !== null ? String(p.last.id) : undefined,
-        eventId: p.last.id ?? undefined,
-        type: p.last.type,
-        severity: p.last.severity,
-        timestamp: p.last.time,
-        timeValid,
-        measurement: p.last.measurement ?? undefined,
-        durationMs: p.last.durationMs ?? undefined,
-        details: p.last.details ?? undefined,
-      }
-    : null;
+  const last = p.last;
+  const latestEvent: SafeCargoEvent | null =
+    last &&
+    last.id !== 0 &&
+    last.type !== "NONE" &&
+    last.severity !== "NORMAL"
+      ? {
+          id: last.id !== undefined && last.id !== null ? String(last.id) : undefined,
+          eventId: last.id ?? undefined,
+          type: last.type,
+          severity: last.severity,
+          timestamp: last.time,
+          timeValid,
+          measurement: last.measurement ?? undefined,
+          durationMs: last.durationMs ?? undefined,
+          details: last.details ?? undefined,
+        }
+      : null;
 
   const latestTimestamp = timeValid
     ? (p.time ?? p.ts ?? latestEvent?.timestamp ?? null)
@@ -196,7 +201,9 @@ export function parseLiveReport(
   let pending: number | undefined = undefined;
 
   for (const e of events) {
-    eventCounts[e.event_type] = (eventCounts[e.event_type] ?? 0) + 1;
+    if (e.event_type !== "NONE") {
+      eventCounts[e.event_type] = (eventCounts[e.event_type] ?? 0) + 1;
+    }
     if (typeof e.measurement === "number") {
       switch (e.event_type) {
         case "SHOCK":
@@ -245,10 +252,14 @@ export function parseLiveReport(
   if (latestEvent) {
     const eventStatus: SafeCargoReportStatus = (() => {
       switch (latestEvent.severity) {
+        case "NORMAL":
+          return "NORMAL";
         case "LOW":
           return "LOW";
         case "MEDIUM":
           return "MEDIUM";
+        case "WARNING":
+          return "WARNING";
         case "HIGH":
           return "HIGH";
         case "CRITICAL":

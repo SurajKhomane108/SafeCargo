@@ -81,6 +81,12 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const r = parsed.data;
   const eventTime = r.time ?? r.timestamp ?? null;
+  const isRealLastEvent =
+    r.last &&
+    r.last.id !== 0 &&
+    r.last.type !== "NONE" &&
+    r.last.severity !== "NORMAL";
+
   const snapshot = {
     v: r.v ?? 1,
     device: deviceId,
@@ -89,7 +95,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     timeValid: r.timeValid ?? true,
     events: r.events,
     max: r.max,
-    last: r.last ?? null,
+    last: isRealLastEvent ? r.last : null,
     pending: r.pending ?? 0,
     sensor: r.sensor ?? null,
     ts: eventTime ?? (r.timeValid !== false ? new Date().toISOString() : null),
