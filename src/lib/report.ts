@@ -334,6 +334,7 @@ export interface LiveDeviceRow {
   current_max_gyro?: number | null;
   last_seen_at?: string | null;
   current_report_jsonb?: unknown;
+  reset_pending?: boolean | null;
 }
 
 export interface LiveEventRow {
@@ -527,6 +528,9 @@ export function parseLiveReport(
     sent: snapSent,
     dropped: snapDropped,
     evicted: snapEvicted,
+    resetPending:
+      Boolean(deviceRow.reset_pending) ||
+      Boolean(snap && (snap as Record<string, unknown>)["reset_pending"]),
     source: "LIVE",
     verification: {
       method: "SERVER",

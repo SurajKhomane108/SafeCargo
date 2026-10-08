@@ -84,6 +84,7 @@ export interface SafeCargoReport {
   evicted?: number;
   eventsLog?: SafeCargoEvent[];
   sensorInfo?: SafeCargoSensorInfo;
+  resetPending?: boolean;
   source: SafeCargoReportSource;
   verification: SafeCargoReportVerification;
 }
@@ -93,6 +94,8 @@ export interface DeviceSummary {
   name: string;
   status: SafeCargoReportStatus;
   lastSeenAt: string | null;
+  createdAt?: string | null;
+  resetPending?: boolean;
 }
 
 export const STATUS_ORDER: SafeCargoReportStatus[] = [

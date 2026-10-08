@@ -155,6 +155,21 @@ export function CargoReport({ report }: { report: SafeCargoReport }) {
         </div>
       </div>
 
+      {/* Remote Reset Pending Alert */}
+      {report.resetPending && (
+        <div className="mb-6 rounded-2xl border border-neon-yellow/50 bg-neon-yellow/10 p-4 text-neon-yellow shadow-[0_0_20px_rgba(250,204,21,0.2)]">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-neon-yellow neon-dot-pulse" />
+            <p className="font-bold text-xs uppercase tracking-wider">
+              Remote Device Reset Pending
+            </p>
+          </div>
+          <p className="mt-1 text-xs text-slate-300">
+            A remote wipe command has been issued for this device. On its next 30-second poll, the device will wipe EEPROM state, erase the NFC tag, and clear all database events.
+          </p>
+        </div>
+      )}
+
       {/* Device ID block */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-neon-line/60 pb-5">
         <div>

@@ -23,6 +23,7 @@ export interface DbDevice {
   current_max_tilt: number | null;
   current_max_gyro: number | null;
   current_report_jsonb: unknown;
+  reset_pending?: boolean | null;
 }
 
 export interface DbEvent {
@@ -114,14 +115,20 @@ export async function getDevice(
   if (!client) return null;
   const { data, error } = await client
     .from("devices")
-    .select(
-      "id,name,created_at,last_seen_at,current_status,current_max_g,current_max_tilt,current_max_gyro,current_report_jsonb"
-    )
+    .select("*")
     .eq("id", deviceId)
     .limit(1)
     .maybeSingle();
   if (error || !data) return null;
-  return data as unknown as DbDevice;
+  const { auth_token_hash, ...safe } = data as Record<string, unknown>;
+  void auth_token_hash;
+  const isResetPending =
+    Boolean(safe.reset_pending) ||
+    Boolean((safe.current_report_jsonb as Record<string, unknown> | null)?.reset_pending);
+  return {
+    ...safe,
+    reset_pending: isResetPending,
+  } as unknown as DbDevice;
 }
 
 export async function listDevices(): Promise<DbDevice[]> {
@@ -131,13 +138,21 @@ export async function listDevices(): Promise<DbDevice[]> {
   if (!client) return [];
   const { data, error } = await client
     .from("devices")
-    .select(
-      "id,name,created_at,last_seen_at,current_status,current_max_g,current_max_tilt,current_max_gyro,current_report_jsonb"
-    )
+    .select("*")
     .order("last_seen_at", { ascending: false, nullsFirst: false })
     .order("id", { ascending: true });
   if (error || !data) return [];
-  return data as unknown as DbDevice[];
+  return data.map((d: Record<string, unknown>) => {
+    const { auth_token_hash, ...safe } = d;
+    void auth_token_hash;
+    const isResetPending =
+      Boolean(safe.reset_pending) ||
+      Boolean((safe.current_report_jsonb as Record<string, unknown> | null)?.reset_pending);
+    return {
+      ...safe,
+      reset_pending: isResetPending,
+    } as unknown as DbDevice;
+  });
 }
 
 export async function getDeviceEvents(
@@ -282,4 +297,103 @@ export async function upsertDeviceReport(
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: "Device not found" };
   return { ok: true, device: data as unknown as DbDevice };
+}
+
+export async function requestDeviceReset(
+  deviceId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createServerRoleSupabase();
+  if (!supabase) return { ok: false, error: "Server not configured" };
+
+  const current = await getDevice(deviceId);
+  if (!current) return { ok: false, error: `Device ${deviceId} not found` };
+
+  const jsonb = (current.current_report_jsonb && typeof current.current_report_jsonb === "object"
+    ? { ...(current.current_report_jsonb as Record<string, unknown>) }
+    : {}) as Record<string, unknown>;
+  jsonb.reset_pending = true;
+
+  let res = await supabase
+    .from("devices")
+    .update({
+      reset_pending: true,
+      current_report_jsonb: jsonb,
+    })
+    .eq("id", deviceId);
+
+  if (res.error && res.error.message?.includes("reset_pending")) {
+    res = await supabase
+      .from("devices")
+      .update({
+        current_report_jsonb: jsonb,
+      })
+      .eq("id", deviceId);
+  }
+
+  if (res.error) return { ok: false, error: res.error.message };
+  return { ok: true };
+}
+
+export async function isDeviceResetPending(
+  deviceId: string
+): Promise<boolean> {
+  const device = await getDevice(deviceId);
+  if (!device) return false;
+  return Boolean(device.reset_pending);
+}
+
+export async function performDeviceReset(
+  deviceId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createServerRoleSupabase();
+  if (!supabase) return { ok: false, error: "Server not configured" };
+
+  // 1. Delete all events for this device (idempotent: works whether 0 or many events exist)
+  const { error: delError } = await supabase
+    .from("events")
+    .delete()
+    .eq("device_id", deviceId);
+
+  if (delError) {
+    console.warn(`[SafeCargo] Events delete warning for ${deviceId}:`, delError.message);
+  }
+
+  // 2. Clear device aggregated state & reset_pending flag
+  const resetUpdates: Record<string, unknown> = {
+    current_status: "NORMAL",
+    current_max_g: null,
+    current_max_tilt: null,
+    current_max_gyro: null,
+    pending_events: 0,
+    reset_pending: false,
+    current_report_jsonb: {
+      v: 1,
+      device: deviceId,
+      status: "NORMAL",
+      events: { shock: 0, tilt: 0, light: 0, motion: 0 },
+      max: { g: null, tilt: null, gyro: null },
+      last: null,
+      pending: 0,
+      sent: 0,
+      dropped: 0,
+      evicted: 0,
+      reset_pending: false,
+    },
+  };
+
+  let res = await supabase
+    .from("devices")
+    .update(resetUpdates)
+    .eq("id", deviceId);
+
+  if (res.error && res.error.message?.includes("reset_pending")) {
+    delete resetUpdates.reset_pending;
+    res = await supabase
+      .from("devices")
+      .update(resetUpdates)
+      .eq("id", deviceId);
+  }
+
+  if (res.error) return { ok: false, error: res.error.message };
+  return { ok: true };
 }

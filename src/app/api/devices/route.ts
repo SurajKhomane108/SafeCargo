@@ -22,6 +22,7 @@ export async function GET(_req: Request) {
     status: d.current_status,
     lastSeenAt: d.last_seen_at,
     createdAt: d.created_at,
+    resetPending: Boolean(d.reset_pending),
   }));
 
   return NextResponse.json({ devices: safe }, { status: 200 });
