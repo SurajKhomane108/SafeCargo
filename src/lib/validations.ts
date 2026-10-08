@@ -66,6 +66,12 @@ export const safeCargoNfcPayloadV1Schema = z.object({
   max: maxMeasurementsV1Schema.default({ g: null, tilt: null, gyro: null }),
   last: lastEventV1Schema.nullish(),
   pending: z.number().int().min(0).nullish(),
+  sent: z.number().int().min(0).nullish(),
+  dropped: z.number().int().min(0).nullish(),
+  evicted: z.number().int().min(0).nullish(),
+  logFmt: z.array(z.string()).nullish(),
+  log: z.array(z.array(z.unknown())).nullish(),
+  logShown: z.number().int().min(0).nullish(),
   sensor: z
     .object({
       accel: z.string().nullish(),
@@ -94,6 +100,9 @@ export const eventIngestionSchema = z.object({
   severity: safeCargoSeverityEnum,
   timestamp: z.string(),
   timeValid: z.boolean().default(true),
+  timeEstimated: z.boolean().nullish(),
+  uptimeSec: z.number().int().nullish(),
+  boot: z.number().int().nullish(),
   accelerationG: z.number().nullish(),
   tiltDeg: z.number().nullish(),
   gyroDps: z.number().nullish(),
@@ -119,6 +128,9 @@ export const reportIngestionSchema = z.object({
   max: maxMeasurementsV1Schema.default({ g: null, tilt: null, gyro: null }),
   last: lastEventV1Schema.nullish(),
   pending: z.number().int().min(0).nullish(),
+  sent: z.number().int().min(0).nullish(),
+  dropped: z.number().int().min(0).nullish(),
+  evicted: z.number().int().min(0).nullish(),
   sensor: z
     .object({
       accel: z.string().nullish(),

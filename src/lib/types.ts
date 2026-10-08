@@ -18,6 +18,8 @@ export type SafeCargoEventSeverity =
 
 export type SafeCargoReportSource = "NFC" | "LIVE" | "DEMO";
 
+export type SafeCargoLogState = "PENDING" | "SENT" | "DROPPED";
+
 export interface SafeCargoEvent {
   id?: string;
   eventId?: number;
@@ -25,12 +27,16 @@ export interface SafeCargoEvent {
   severity: SafeCargoEventSeverity;
   timestamp: string;
   timeValid?: boolean;
+  timeEstimated?: boolean;
   measurement?: number;
   accelerationG?: number;
   tiltDeg?: number;
   gyroDps?: number;
   ldrValue?: number;
   durationMs?: number;
+  logState?: SafeCargoLogState;
+  boot?: number;
+  uptimeSec?: number;
   details?: Record<string, unknown>;
 }
 
@@ -73,6 +79,10 @@ export interface SafeCargoReport {
   latestTimestamp: string | null;
   timeValid?: boolean;
   pending?: number;
+  sent?: number;
+  dropped?: number;
+  evicted?: number;
+  eventsLog?: SafeCargoEvent[];
   sensorInfo?: SafeCargoSensorInfo;
   source: SafeCargoReportSource;
   verification: SafeCargoReportVerification;

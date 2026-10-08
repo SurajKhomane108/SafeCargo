@@ -1,6 +1,9 @@
 import type {
   SafeCargoEvent,
   SafeCargoEventCounts,
+  SafeCargoEventSeverity,
+  SafeCargoEventType,
+  SafeCargoLogState,
   SafeCargoMaxMeasurements,
   SafeCargoReport,
   SafeCargoReportStatus,
@@ -29,6 +32,163 @@ export function isDemoPlainText(text: string): boolean {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function parseNfcLogType(raw: unknown): SafeCargoEventType {
+  if (typeof raw === "string") {
+    const s = raw.toUpperCase().trim();
+    if (s === "S" || s === "SHOCK") return "SHOCK";
+    if (s === "T" || s === "TILT") return "TILT";
+    if (s === "M" || s === "MOTION") return "MOTION";
+    if (s === "L" || s === "LIGHT") return "LIGHT";
+  }
+  return "SHOCK";
+}
+
+function parseNfcLogSeverity(raw: unknown): SafeCargoEventSeverity {
+  if (typeof raw === "number") {
+    switch (raw) {
+      case 0: return "NORMAL";
+      case 1: return "LOW";
+      case 2: return "MEDIUM";
+      case 3: return "WARNING";
+      case 4: return "HIGH";
+      case 5: return "CRITICAL";
+      default: return "MEDIUM";
+    }
+  }
+  if (typeof raw === "string") {
+    const s = raw.toUpperCase().trim();
+    if (
+      s === "NORMAL" ||
+      s === "LOW" ||
+      s === "MEDIUM" ||
+      s === "WARNING" ||
+      s === "HIGH" ||
+      s === "CRITICAL"
+    ) {
+      return s as SafeCargoEventSeverity;
+    }
+  }
+  return "MEDIUM";
+}
+
+function parseNfcLogState(raw: unknown): SafeCargoLogState {
+  if (typeof raw === "string") {
+    const s = raw.toUpperCase().trim();
+    if (s === "S" || s === "SENT") return "SENT";
+    if (s === "D" || s === "DROPPED") return "DROPPED";
+    if (s === "P" || s === "PENDING") return "PENDING";
+  }
+  return "PENDING";
+}
+
+export function decodeNfcLog(
+  rawLog?: unknown[][] | unknown[] | null,
+  rawFmt?: string[] | null
+): SafeCargoEvent[] {
+  if (!Array.isArray(rawLog) || rawLog.length === 0) return [];
+
+  // Default layout if rawFmt is not provided:
+  // ["id","type","sev","epoch","tq","g","tilt","gyro","ldr","st","boot","up"]
+  const fmt = Array.isArray(rawFmt) && rawFmt.length > 0 ? rawFmt : null;
+  const getIndex = (name: string, fallback: number) => {
+    if (!fmt) return fallback;
+    const idx = fmt.indexOf(name);
+    return idx >= 0 ? idx : fallback;
+  };
+
+  const idIdx = getIndex("id", 0);
+  const typeIdx = getIndex("type", 1);
+  const sevIdx = getIndex("sev", 2);
+  const epochIdx = getIndex("epoch", 3);
+  const tqIdx = getIndex("tq", 4);
+  const gIdx = getIndex("g", 5);
+  const tiltIdx = getIndex("tilt", 6);
+  const gyroIdx = getIndex("gyro", 7);
+  const ldrIdx = getIndex("ldr", 8);
+  const stIdx = getIndex("st", 9);
+  const bootIdx = getIndex("boot", 10);
+  const upIdx = getIndex("up", 11);
+
+  const events: SafeCargoEvent[] = [];
+
+  for (const item of rawLog) {
+    if (!Array.isArray(item) || item.length === 0) continue;
+    const entry = item as unknown[];
+
+    const rawId = entry[idIdx];
+    const eventId =
+      typeof rawId === "number" ? rawId : parseInt(String(rawId), 10);
+    if (!Number.isFinite(eventId) || eventId === 0) continue;
+
+    const type = parseNfcLogType(entry[typeIdx]);
+    const severity = parseNfcLogSeverity(entry[sevIdx]);
+    const logState = parseNfcLogState(entry[stIdx]);
+
+    const rawEpoch = Number(entry[epochIdx]);
+    const rawTq = Number(entry[tqIdx]);
+    const hasValidEpoch = Number.isFinite(rawEpoch) && rawEpoch > 1500000000;
+
+    const timestamp = hasValidEpoch
+      ? new Date(rawEpoch * 1000).toISOString()
+      : "UNSYNCED";
+    const timeValid = hasValidEpoch && rawTq > 0;
+    const timeEstimated = rawTq === 2;
+
+    const accelerationG =
+      typeof entry[gIdx] === "number" ? (entry[gIdx] as number) : undefined;
+    const tiltDeg =
+      typeof entry[tiltIdx] === "number" ? (entry[tiltIdx] as number) : undefined;
+    const gyroDps =
+      typeof entry[gyroIdx] === "number" ? (entry[gyroIdx] as number) : undefined;
+    const ldrValue =
+      typeof entry[ldrIdx] === "number"
+        ? Math.round(entry[ldrIdx] as number)
+        : undefined;
+
+    const boot =
+      typeof entry[bootIdx] === "number" ? (entry[bootIdx] as number) : undefined;
+    const uptimeSec =
+      typeof entry[upIdx] === "number" ? (entry[upIdx] as number) : undefined;
+
+    let measurement: number | undefined;
+    if (type === "SHOCK") measurement = accelerationG;
+    else if (type === "TILT") measurement = tiltDeg;
+    else if (type === "MOTION") measurement = gyroDps;
+    else if (type === "LIGHT") measurement = ldrValue;
+
+    events.push({
+      id: `nfc-${eventId}`,
+      eventId,
+      type,
+      severity,
+      timestamp,
+      timeValid,
+      timeEstimated,
+      measurement,
+      accelerationG,
+      tiltDeg,
+      gyroDps,
+      ldrValue,
+      logState,
+      boot,
+      uptimeSec,
+      details: {
+        logState,
+        timeQuality:
+          rawTq === 1 ? "exact" : rawTq === 2 ? "estimated" : "unsynced",
+        bootCount: boot,
+        uptimeSec,
+        accelerationG,
+        tiltDeg,
+        gyroDps,
+        ldrValue,
+      },
+    });
+  }
+
+  return events;
 }
 
 export function parseNFCReport(
@@ -97,8 +257,13 @@ export function parseNFCReport(
 
   const timeValid = p.timeValid ?? true;
 
+  const eventsLog = decodeNfcLog(
+    p.log as unknown[][] | undefined,
+    p.logFmt ?? undefined
+  );
+
   const last = p.last;
-  const latestEvent: SafeCargoEvent | null =
+  let latestEvent: SafeCargoEvent | null =
     last &&
     last.id !== 0 &&
     last.type !== "NONE" &&
@@ -116,6 +281,10 @@ export function parseNFCReport(
         }
       : null;
 
+  if (!latestEvent && eventsLog.length > 0) {
+    latestEvent = eventsLog[0];
+  }
+
   const latestTimestamp = timeValid
     ? (p.time ?? p.ts ?? latestEvent?.timestamp ?? null)
     : null;
@@ -131,6 +300,10 @@ export function parseNFCReport(
     latestTimestamp,
     timeValid,
     pending: p.pending ?? undefined,
+    sent: p.sent ?? undefined,
+    dropped: p.dropped ?? undefined,
+    evicted: p.evicted ?? undefined,
+    eventsLog: eventsLog.length > 0 ? eventsLog : undefined,
     sensorInfo: p.sensor
       ? {
           accelerometer: p.sensor.accel ?? undefined,
@@ -323,6 +496,17 @@ export function parseLiveReport(
     }
   }
 
+  const snapSent =
+    snap && typeof snap["sent"] === "number" ? (snap["sent"] as number) : undefined;
+  const snapDropped =
+    snap && typeof snap["dropped"] === "number"
+      ? (snap["dropped"] as number)
+      : undefined;
+  const snapEvicted =
+    snap && typeof snap["evicted"] === "number"
+      ? (snap["evicted"] as number)
+      : undefined;
+
   const timeValid = latestEvent
     ? (latestEvent.timeValid ?? true)
     : snap && typeof snap["timeValid"] === "boolean"
@@ -340,6 +524,9 @@ export function parseLiveReport(
     latestTimestamp: timeValid ? latestTimestamp : null,
     timeValid,
     pending,
+    sent: snapSent,
+    dropped: snapDropped,
+    evicted: snapEvicted,
     source: "LIVE",
     verification: {
       method: "SERVER",

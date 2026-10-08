@@ -132,12 +132,34 @@ export function EventHistory({ events }: { events: SafeCargoEvent[] }) {
                   <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                     {ev.severity}
                   </span>
+                  {ev.logState && (
+                    <StatusBadge
+                      label={
+                        ev.logState === "SENT"
+                          ? "CLOUD SYNCED"
+                          : ev.logState === "DROPPED"
+                          ? "DROPPED"
+                          : "PENDING SYNC"
+                      }
+                      variant={ev.logState}
+                      size="sm"
+                    />
+                  )}
                 </div>
-                <span className="font-mono text-[11px] text-slate-400">
-                  {ev.timeValid === false
-                    ? "Unsynchronized Clock"
-                    : formatTimestamp(ev.timestamp)}
-                </span>
+                <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-400">
+                  {ev.timeValid === false ? (
+                    <span className="text-neon-yellow">Unsynchronized Clock</span>
+                  ) : (
+                    <>
+                      <span>{formatTimestamp(ev.timestamp)}</span>
+                      {ev.timeEstimated && (
+                        <span className="text-[10px] text-slate-500 italic">
+                          (est.)
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
               <div className="grid gap-3 text-sm sm:grid-cols-3">
                 <div>

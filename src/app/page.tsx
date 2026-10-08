@@ -125,6 +125,9 @@ export default function Home() {
     mode === "NFC" ? nfcReport : liveReport;
   const displayEvents: SafeCargoEvent[] = useMemo(() => {
     if (mode === "NFC") {
+      if (nfcReport?.eventsLog && nfcReport.eventsLog.length > 0) {
+        return nfcReport.eventsLog;
+      }
       return nfcReport?.latestEvent ? [nfcReport.latestEvent] : [];
     }
     return liveEvents;

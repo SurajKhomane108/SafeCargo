@@ -1,9 +1,18 @@
-﻿import type {
+import type {
   SafeCargoEventSeverity,
+  SafeCargoLogState,
   SafeCargoReportStatus,
 } from "@/lib/types";
 
-type BadgeVariant = SafeCargoReportStatus | SafeCargoEventSeverity | "DEMO" | "NFC" | "LIVE" | "ONLINE" | "OFFLINE";
+type BadgeVariant =
+  | SafeCargoReportStatus
+  | SafeCargoEventSeverity
+  | SafeCargoLogState
+  | "DEMO"
+  | "NFC"
+  | "LIVE"
+  | "ONLINE"
+  | "OFFLINE";
 
 const STATUS_STYLES: Record<BadgeVariant, {
   text: string;
@@ -23,6 +32,10 @@ const STATUS_STYLES: Record<BadgeVariant, {
   LIVE:     { text: "text-neon-lime",   bg: "bg-neon-lime/10",   border: "border-neon-lime/40",    glow: "0 0 16px rgba(132,204,22,0.45)" },
   ONLINE:   { text: "text-neon-green",  bg: "bg-neon-green/10",  border: "border-neon-green/40",   glow: "0 0 12px rgba(34,197,94,0.40)" },
   OFFLINE:  { text: "text-slate-400",   bg: "bg-slate-600/10",   border: "border-slate-500/40" },
+
+  PENDING:  { text: "text-neon-yellow", bg: "bg-neon-yellow/10", border: "border-neon-yellow/40", glow: "0 0 12px rgba(250,204,21,0.35)" },
+  SENT:     { text: "text-neon-cyan-bright", bg: "bg-neon-cyan/10", border: "border-neon-cyan/40", glow: "0 0 12px rgba(34,211,238,0.35)" },
+  DROPPED:  { text: "text-neon-red",    bg: "bg-neon-red/10",    border: "border-neon-red/40",    glow: "0 0 12px rgba(239,68,68,0.35)" },
 };
 
 export function StatusBadge({

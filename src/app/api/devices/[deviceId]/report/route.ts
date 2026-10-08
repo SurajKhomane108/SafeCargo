@@ -97,6 +97,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     max: r.max,
     last: isRealLastEvent ? r.last : null,
     pending: r.pending ?? 0,
+    sent: r.sent ?? 0,
+    dropped: r.dropped ?? 0,
+    evicted: r.evicted ?? 0,
     sensor: r.sensor ?? null,
     ts: eventTime ?? (r.timeValid !== false ? new Date().toISOString() : null),
   };

@@ -103,7 +103,12 @@ export async function POST(req: Request, { params }: RouteParams) {
     ldrValue: ev.ldrValue ?? null,
     timeValid: ev.timeValid,
     durationMs: ev.durationMs ?? null,
-    details: ev.details ?? null,
+    details: {
+      ...(ev.details ?? {}),
+      ...(ev.timeEstimated !== undefined ? { timeEstimated: ev.timeEstimated } : {}),
+      ...(ev.boot !== undefined ? { boot: ev.boot } : {}),
+      ...(ev.uptimeSec !== undefined ? { uptimeSec: ev.uptimeSec } : {}),
+    },
     timestamp: ev.timestamp ?? null,
     source: ev.source,
   });

@@ -215,7 +215,7 @@ export function CargoReport({ report }: { report: SafeCargoReport }) {
         </div>
       </div>
 
-      {/* Peak measurements */}
+      {/* Peak Measurements */}
       <div className="mb-6">
         <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
           Peak Measurements
@@ -259,6 +259,59 @@ export function CargoReport({ report }: { report: SafeCargoReport }) {
           />
         </div>
       </div>
+
+      {/* Cloud Delivery & Storage Stats (Firmware v2.2) */}
+      {(report.pending !== undefined ||
+        report.sent !== undefined ||
+        report.dropped !== undefined ||
+        report.evicted !== undefined) && (
+        <div className="mb-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Cloud Delivery & Storage Stats
+            </h4>
+            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-wider">
+              {report.eventsLog?.length
+                ? `${report.eventsLog.length} events on tag`
+                : "Firmware v2.2"}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <div className="rounded-2xl border border-neon-yellow/30 bg-neon-yellow/5 p-3 text-center">
+              <span className="font-mono text-xl font-bold text-neon-yellow">
+                {report.pending ?? 0}
+              </span>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">
+                Pending Sync
+              </p>
+            </div>
+            <div className="rounded-2xl border border-neon-cyan/30 bg-neon-cyan/5 p-3 text-center">
+              <span className="font-mono text-xl font-bold text-neon-cyan-bright">
+                {report.sent ?? 0}
+              </span>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">
+                Delivered
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-3 text-center">
+              <span className="font-mono text-xl font-bold text-slate-300">
+                {report.dropped ?? 0}
+              </span>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">
+                Rejected (4xx)
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-3 text-center">
+              <span className="font-mono text-xl font-bold text-slate-400">
+                {report.evicted ?? 0}
+              </span>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">
+                Evicted / Lost
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Latest event */}
       <div>
