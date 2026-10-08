@@ -1,439 +1,302 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppHeader } from "@/components/AppHeader";
+import { NFCScanner } from "@/components/NFCScanner";
+import type {
+  DemoVerification,
+  NFCScannerResult,
+} from "@/components/NFCScanner";
+import { LiveMonitor } from "@/components/LiveMonitor";
+import { CargoReport } from "@/components/CargoReport";
+import { EventHistory } from "@/components/EventHistory";
+import { StatusBadge } from "@/components/StatusBadge";
+import type {
+  SafeCargoEvent,
+  SafeCargoReport,
+  SafeCargoReportSource,
+} from "@/lib/types";
 
-type NFCRecord = {
-  recordType: string;
-  mediaType?: string;
-  data: string;
-};
+type Mode = "NFC" | "LIVE";
 
-type NFCResult = {
-  serialNumber: string;
-  records: NFCRecord[];
-};
+const LIVE_UNAVAILABLE =
+  "Live data is currently unavailable. NFC/offline verification can still be used.";
+
+const LIVE_UNAVAILABLE_STATIC: boolean = !(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
+function readInitialFromUrl(): { mode: Mode; device: string | null } {
+  if (typeof window === "undefined") return { mode: "NFC", device: null };
+  try {
+    const url = new URL(window.location.href);
+    const device = url.searchParams.get("device");
+    const m = url.searchParams.get("mode");
+    const mode: Mode = m === "live" ? "LIVE" : m === "nfc" ? "NFC" : "NFC";
+    return { mode, device };
+  } catch {
+    return { mode: "NFC", device: null };
+  }
+}
 
 export default function Home() {
-  const [scanning, setScanning] = useState(false);
-  const [status, setStatus] = useState(
-    "Ready to scan an NFC SafeCargo tag."
+  const [mode, setMode] = useState<Mode>(() => readInitialFromUrl().mode);
+  const initialDeviceId: string | null = readInitialFromUrl().device;
+  const [hydratedTick, setHydratedTick] = useState(0);
+  const [nowMs, setNowMs] = useState<number>(0);
+
+  // NFC state
+  const [nfcDemo, setNfcDemo] = useState<DemoVerification | null>(null);
+  const [nfcReport, setNfcReport] = useState<SafeCargoReport | null>(null);
+
+  // Live state
+  const [liveReport, setLiveReport] = useState<SafeCargoReport | null>(null);
+  const [liveEvents, setLiveEvents] = useState<SafeCargoEvent[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const bump = () => {
+      if (cancelled) return;
+      setNowMs(Date.now());
+    };
+    const id = setInterval(bump, 15_000);
+    Promise.resolve()
+      .then(bump)
+      .then(() => {
+        if (!cancelled) setHydratedTick((t) => t + 1);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  const activeSource: SafeCargoReportSource | "IDLE" = useMemo(() => {
+    if (mode === "NFC") {
+      if (nfcReport) return "NFC";
+      if (nfcDemo) return "DEMO";
+      return "IDLE";
+    }
+    if (liveReport) return "LIVE";
+    return "IDLE";
+  }, [mode, nfcReport, nfcDemo, liveReport]);
+
+  const lastSeenAt: string | null = useMemo(() => {
+    if (mode === "NFC") {
+      if (nfcReport) return nfcReport.latestTimestamp;
+      if (nfcDemo) return nfcDemo.verifiedAt;
+      return null;
+    }
+    return liveReport ? liveReport.latestTimestamp : null;
+  }, [mode, nfcReport, nfcDemo, liveReport]);
+
+  const online: boolean | null = useMemo(() => {
+    if (mode !== "LIVE" || !liveReport?.latestTimestamp) return null;
+    const t = new Date(liveReport.latestTimestamp).getTime();
+    if (!t) return false;
+    return nowMs - t < 5 * 60 * 1000;
+  }, [mode, liveReport, nowMs]);
+
+  const handleNfcReport = useCallback((res: NFCScannerResult) => {
+    setLiveReport(null);
+    setLiveEvents([]);
+    setNfcDemo(null);
+    setNfcReport(res.report);
+  }, []);
+
+  const handleNfcDemo = useCallback((res: DemoVerification) => {
+    setLiveReport(null);
+    setLiveEvents([]);
+    setNfcReport(null);
+    setNfcDemo(res);
+  }, []);
+
+  const handleLiveReportLoaded = useCallback(
+    (r: SafeCargoReport, evs: SafeCargoEvent[]) => {
+      setLiveReport(r);
+      setLiveEvents(evs);
+    },
+    []
   );
-  const [result, setResult] = useState<NFCResult | null>(null);
-  const [error, setError] = useState("");
 
-  const readerRef = useRef<any>(null);
-
-  async function scanNFC() {
-    setError("");
-    setResult(null);
-
-    if (!("NDEFReader" in window)) {
-      setError(
-        "Web NFC is not available in this browser. Use Chrome on your Android phone with NFC enabled."
-      );
-      setStatus("NFC unavailable");
-      return;
+  const displayReport: SafeCargoReport | null =
+    mode === "NFC" ? nfcReport : liveReport;
+  const displayEvents: SafeCargoEvent[] = useMemo(() => {
+    if (mode === "NFC") {
+      return nfcReport?.latestEvent ? [nfcReport.latestEvent] : [];
     }
+    return liveEvents;
+  }, [mode, nfcReport, liveEvents]);
 
-    try {
-      setScanning(true);
-      setStatus("Starting NFC scanner...");
-
-      const NDEFReaderClass = (window as any).NDEFReader;
-      const ndef = new NDEFReaderClass();
-
-      readerRef.current = ndef;
-
-      ndef.addEventListener("readingerror", () => {
-        setError(
-          "The NFC tag could not be read. Hold the phone directly over the ST25DV tag and try again."
-        );
-        setStatus("NFC read failed");
-        setScanning(false);
-      });
-
-      ndef.addEventListener(
-        "reading",
-        async (event: any) => {
-          try {
-            setStatus("NFC tag detected. Reading data...");
-
-            const records: NFCRecord[] = [];
-
-            for (const record of event.message.records) {
-              const data = await decodeNDEFRecord(record);
-
-              records.push({
-                recordType: record.recordType,
-                mediaType: record.mediaType || "",
-                data,
-              });
-            }
-
-            setResult({
-              serialNumber: event.serialNumber || "Not provided",
-              records,
-            });
-
-            setStatus("NFC report successfully read.");
-            setScanning(false);
-          } catch (err) {
-            console.error(err);
-
-            setError("The NFC data was detected but could not be decoded.");
-            setStatus("NFC decoding failed");
-            setScanning(false);
-          }
-        },
-        { once: true }
-      );
-
-      await ndef.scan();
-
-      setStatus(
-        "Scanner active. Hold your phone close to the SafeCargo NFC tag."
-      );
-    } catch (err: any) {
-      console.error(err);
-
-      setScanning(false);
-
-      if (err?.name === "NotAllowedError") {
-        setError(
-          "NFC permission was denied. Allow NFC access and try again."
-        );
-      } else if (err?.name === "NotSupportedError") {
-        setError(
-          "This browser or device does not support Web NFC."
-        );
-      } else if (err?.name === "InvalidStateError") {
-        setError(
-          "An NFC scan is already running. Try again after the current scan finishes."
-        );
-      } else {
-        setError(
-          err?.message ||
-            "Unable to start NFC scanning. Make sure NFC is enabled."
-        );
-      }
-
-      setStatus("Unable to start NFC scanner");
-    }
-  }
+  const liveUnavailable = hydratedTick > 0 ? LIVE_UNAVAILABLE_STATIC : false;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-5 py-8 sm:px-8">
+    <main className="relative min-h-screen text-white">
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col px-5 py-8 sm:px-8">
+        <AppHeader
+          source={activeSource}
+          online={mode === "LIVE" ? online : null}
+          lastSeenAt={lastSeenAt}
+        />
 
-        {/* Header */}
-        <header className="mb-10 flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500 font-bold text-slate-950">
-                SC
-              </div>
-
-              <div>
-                <h1 className="text-xl font-bold tracking-tight">
-                  SafeCargo
-                </h1>
-
-                <p className="text-xs text-slate-400">
-                  Intelligent Cargo Monitoring
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300">
-            Offline NFC Mode
-          </div>
-        </header>
-
-        {/* Main */}
-        <section className="flex flex-1 flex-col">
-
-          <div className="mb-8 max-w-2xl">
-            <p className="mb-3 text-sm font-medium text-cyan-400">
-              CARGO SECURITY REPORT
-            </p>
-
-            <h2 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-              Verify your cargo
-              <br />
+        {/* Hero */}
+        <section className="mb-8 max-w-3xl">
+          <p className="mb-3 text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan-bright sm:text-sm">
+            CARGO SECURITY REPORT
+          </p>
+          <h2 className="text-4xl font-black leading-[1.05] tracking-tight sm:text-6xl">
+            <span className="neon-text-glow-cyan">Verify your cargo</span>
+            <br className="hidden sm:block" />
+            <span className="sm:pl-20 neon-text-glow-magenta">
               with one tap.
-            </h2>
+            </span>
+          </h2>
+          <p className="mt-5 text-base leading-7 text-slate-400 sm:text-lg">
+            Read the locally stored SafeCargo monitoring report directly
+            from the NFC tag attached to your shipment, or stream the live
+            state from any device in your fleet.
+          </p>
+        </section>
 
-            <p className="mt-5 text-base leading-7 text-slate-400">
-              Read the locally stored SafeCargo monitoring report directly
-              from the NFC tag attached to your shipment.
-            </p>
-          </div>
+        {/* Mode switch */}
+        <div className="mb-6 flex w-full max-w-md rounded-2xl border border-neon-line bg-neon-void/70 p-1 backdrop-blur-md">
+          {(["NFC", "LIVE"] as Mode[]).map((m) => {
+            const active = mode === m;
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={`relative flex-1 rounded-xl px-4 py-3 text-sm font-bold uppercase tracking-[0.22em] transition ${
+                  active
+                    ? m === "NFC"
+                      ? "bg-gradient-to-r from-neon-cyan/30 to-neon-purple/25 text-white shadow-[0_0_24px_-8px_rgba(34,211,238,0.6)] ring-1 ring-neon-cyan/50"
+                      : "bg-gradient-to-r from-neon-lime/20 to-neon-green/25 text-white shadow-[0_0_24px_-8px_rgba(34,197,94,0.6)] ring-1 ring-neon-green/50"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                {m === "NFC" ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M8 3a9 9 0 000 18M16 3a9 9 0 010 18M11 6.5a5.5 5.5 0 000 11M13 6.5a5.5 5.5 0 010 11"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    NFC TAP
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M4 12h3l2.5-5L12 14l2.5-6L20 12"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <circle cx="20" cy="20" r="2" fill="currentColor" />
+                    </svg>
+                    LIVE
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-          {/* Scanner Card */}
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl sm:p-8">
+        {/* NFC path */}
+        {mode === "NFC" && (
+          <section className="flex flex-1 flex-col gap-6">
+            <NFCScanner
+              onReport={handleNfcReport}
+              onDemoVerified={handleNfcDemo}
+            />
 
-            <div className="mb-6">
-              <h3 className="text-xl font-semibold">
-                NFC Report Scanner
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-400">
-                Enable NFC on your phone and hold it close to the
-                SafeCargo ST25DV tag.
-              </p>
-            </div>
-
-            <button
-              onClick={scanNFC}
-              disabled={scanning}
-              className="w-full rounded-2xl bg-cyan-500 px-6 py-4 text-base font-bold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {scanning ? "Scanning NFC..." : "Scan NFC Report"}
-            </button>
-
-            {/* Status */}
-            <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`h-3 w-3 rounded-full ${
-                    scanning
-                      ? "animate-pulse bg-yellow-400"
-                      : result
-                      ? "bg-green-400"
-                      : error
-                      ? "bg-red-400"
-                      : "bg-slate-500"
-                  }`}
-                />
-
-                <p className="text-sm text-slate-300">
-                  {status}
+            {nfcDemo && (
+              <div className="rounded-3xl neon-border-purple bg-neon-void/40 p-5 sm:p-7">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-white">
+                    This is a demo NFC tag
+                  </h3>
+                  <StatusBadge label="DEMO" variant="DEMO" size="md" pulse />
+                </div>
+                <p className="text-sm leading-7 text-slate-300">
+                  Your ST25DV → Galaxy S20 FE → Chrome → SafeCargo pipeline is
+                  working. Once the firmware writes the structured report
+                  payload, the full Cargo Report panel below will render with
+                  real sensor data.
                 </p>
+                <pre className="mt-5 max-h-44 overflow-auto scrollbar-thin whitespace-pre-wrap break-words rounded-2xl border border-neon-line bg-black/60 p-4 font-mono text-xs leading-6 text-neon-purple">
+{JSON.stringify({
+  message: nfcDemo.rawMessage,
+  serial: nfcDemo.serialNumber,
+  recordCount: nfcDemo.records.length,
+  verifiedAt: nfcDemo.verifiedAt,
+}, null, 2)}
+                </pre>
               </div>
-            </div>
+            )}
 
-            {/* Error */}
-            {error && (
-              <div className="mt-5 rounded-xl border border-red-900 bg-red-950/40 p-4">
-                <p className="text-sm leading-6 text-red-300">
-                  {error}
+            {nfcReport && (
+              <>
+                <CargoReport report={nfcReport} />
+                {nfcReport.latestEvent && (
+                  <EventHistory events={[nfcReport.latestEvent]} />
+                )}
+              </>
+            )}
+          </section>
+        )}
+
+        {/* Live path */}
+        {mode === "LIVE" && (
+          <section className="flex flex-1 flex-col gap-6">
+            {liveUnavailable && (
+              <div className="rounded-2xl border border-neon-yellow/40 bg-neon-yellow/5 p-4 text-sm text-neon-yellow/90 shadow-[0_0_30px_-10px_rgba(250,204,21,0.4)]">
+                <p className="font-semibold">⚠ {LIVE_UNAVAILABLE}</p>
+                <p className="mt-1 opacity-90">
+                  Configure{" "}
+                  <code className="rounded bg-black/50 px-1.5 py-0.5 font-mono text-[12px] text-neon-yellow">
+                    NEXT_PUBLIC_SUPABASE_URL
+                  </code>{" "}
+                  and{" "}
+                  <code className="rounded bg-black/50 px-1.5 py-0.5 font-mono text-[12px] text-neon-yellow">
+                    NEXT_PUBLIC_SUPABASE_ANON_KEY
+                  </code>{" "}
+                  in your environment to enable Live mode.
                 </p>
               </div>
             )}
 
+            <LiveMonitor
+              initialDeviceId={initialDeviceId}
+              onReportLoaded={handleLiveReportLoaded}
+            />
+
+            {displayReport && (
+              <>
+                <CargoReport report={displayReport} />
+                <EventHistory events={displayEvents} />
+              </>
+            )}
+          </section>
+        )}
+
+        <footer className="mt-14 border-t border-neon-line/70 pt-6 pb-4 text-center text-xs text-slate-500">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 font-mono">
+            <span>SafeCargo</span>
+            <span className="opacity-40">•</span>
+            <span>Secure Offline Cargo Verification</span>
+            <span className="opacity-40">•</span>
+            <span>ST25DV64KC · ESP8266 · Supabase · Next.js</span>
           </div>
-
-          {/* Result */}
-          {result && (
-            <div className="mt-8 space-y-5">
-
-              <div className="rounded-3xl border border-green-900 bg-green-950/30 p-6">
-                <div className="mb-5 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-green-400">
-                      Verification
-                    </p>
-
-                    <h3 className="mt-1 text-2xl font-bold">
-                      NFC Report Verified
-                    </h3>
-                  </div>
-
-                  <div className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400">
-                    SUCCESS
-                  </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-
-                  <InfoBox
-                    label="NFC Serial Number"
-                    value={result.serialNumber}
-                  />
-
-                  <InfoBox
-                    label="Records Detected"
-                    value={String(result.records.length)}
-                  />
-
-                </div>
-              </div>
-
-              {/* Records */}
-              <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <h3 className="mb-5 text-lg font-semibold">
-                  NFC Data
-                </h3>
-
-                <div className="space-y-4">
-                  {result.records.map((record, index) => (
-                    <div
-                      key={index}
-                      className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
-                    >
-                      <div className="mb-3 flex flex-wrap gap-2">
-                        <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
-                          Record {index + 1}
-                        </span>
-
-                        <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs text-cyan-400">
-                          {record.recordType}
-                        </span>
-
-                        {record.mediaType && (
-                          <span className="rounded-full bg-purple-500/10 px-3 py-1 text-xs text-purple-400">
-                            {record.mediaType}
-                          </span>
-                        )}
-                      </div>
-
-                      <pre className="whitespace-pre-wrap break-words rounded-xl bg-black p-4 font-mono text-sm leading-6 text-slate-300">
-                        {record.data}
-                      </pre>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Future report */}
-              <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <h3 className="mb-2 text-lg font-semibold">
-                  SafeCargo Report
-                </h3>
-
-                <p className="mb-5 text-sm text-slate-400">
-                  This section will display the complete cargo monitoring
-                  report once the final SafeCargo data format is connected.
-                </p>
-
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <ReportPlaceholder
-                    title="Cargo Status"
-                    value="NFC VERIFIED"
-                  />
-
-                  <ReportPlaceholder
-                    title="Motion Events"
-                    value="Pending"
-                  />
-
-                  <ReportPlaceholder
-                    title="Light Events"
-                    value="Pending"
-                  />
-                </div>
-              </div>
-
-            </div>
-          )}
-
-        </section>
-
-        <footer className="mt-12 border-t border-slate-800 pt-6 text-center text-xs text-slate-500">
-          SafeCargo • Secure Offline Cargo Verification
         </footer>
-
       </div>
     </main>
-  );
-}
-
-
-/* ---------------------------------------------------------
-   NDEF DECODER
---------------------------------------------------------- */
-
-async function decodeNDEFRecord(record: any): Promise<string> {
-  try {
-    if (record.recordType === "text") {
-      const decoder = new TextDecoder(record.encoding || "utf-8");
-
-      const bytes = new Uint8Array(record.data);
-
-      if (bytes.length === 0) {
-        return "";
-      }
-
-      const languageCodeLength = bytes[0] & 0x3f;
-
-      return decoder.decode(
-        bytes.slice(languageCodeLength + 1)
-      );
-    }
-
-    if (record.recordType === "url") {
-      const decoder = new TextDecoder();
-
-      return decoder.decode(record.data);
-    }
-
-    if (record.recordType === "mime") {
-      const decoder = new TextDecoder();
-
-      return decoder.decode(record.data);
-    }
-
-    if (record.recordType === "absolute-url") {
-      const decoder = new TextDecoder();
-
-      return decoder.decode(record.data);
-    }
-
-    if (record.recordType === "empty") {
-      return "[Empty NDEF record]";
-    }
-
-    const decoder = new TextDecoder();
-
-    return decoder.decode(record.data);
-  } catch {
-    return "[Unable to decode record]";
-  }
-}
-
-
-/* ---------------------------------------------------------
-   UI COMPONENTS
---------------------------------------------------------- */
-
-function InfoBox({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-      <p className="text-xs text-slate-500">
-        {label}
-      </p>
-
-      <p className="mt-2 break-all font-mono text-sm text-slate-200">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-
-function ReportPlaceholder({
-  title,
-  value,
-}: {
-  title: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-      <p className="text-xs text-slate-500">
-        {title}
-      </p>
-
-      <p className="mt-2 font-semibold text-slate-200">
-        {value}
-      </p>
-    </div>
   );
 }
